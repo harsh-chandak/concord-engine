@@ -1,7 +1,7 @@
 {
-  "name": "agentguard",
+  "name": "@harsh-chandak/agentguard",
   "version": "0.1.0",
-  "description": "Agents that can't contradict each other. A decision log for hierarchical coding agents, with deterministic contradiction detection and an escalation ladder — no model call in the decision path.",
+  "description": "Agents that can't contradict each other. A decision log for hierarchical coding agents, with deterministic contradiction detection and an escalation ladder \u2014 no model call in the decision path.",
   "keywords": [
     "ai-agents",
     "agent-orchestration",
@@ -61,5 +61,8 @@
       "optional": true
     }
   },
-  "mcpName": "io.github.harsh-chandak/agentguard"
+  "mcpName": "io.github.harsh-chandak/agentguard",
+  "publishConfig": {
+    "access": "public"
+  }
 }

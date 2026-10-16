@@ -21,7 +21,7 @@
   "mcpServers": {
     "agentguard": {
       "command": "npx",
-      "args": ["-y", "-p", "agentguard", "-p", "@modelcontextprotocol/sdk", "agentguard-mcp"],
+      "args": ["-y", "-p", "@harsh-chandak/agentguard", "-p", "@modelcontextprotocol/sdk", "agentguard-mcp"],
       "env": { "AGENTGUARD_DIR": "${user_config.decisions_dir}" }
     }
   }

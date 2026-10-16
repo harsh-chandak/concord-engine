@@ -67,7 +67,7 @@ claude plugin install agentguard@harsh-chandak
 Or without Claude Code:
 
 ```bash
-npx agentguard --help
+npx @harsh-chandak/agentguard --help
 ```
 
 ## Use
@@ -75,6 +75,7 @@ npx agentguard --help
 Leads and the PM decide. **Workers write code and decide nothing.**
 
 ```bash
+# `agentguard` is the command; the package is scoped
 agentguard decide --kind naming \
   --subject "user identifier in API payloads" \
   --value user_id --as backend-lead \
