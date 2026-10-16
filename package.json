@@ -2,22 +2,63 @@
   "name": "agentguard",
   "version": "0.1.0",
   "description": "Agents that can't contradict each other. A decision log for hierarchical coding agents, with deterministic contradiction detection and an escalation ladder — no model call in the decision path.",
-  "keywords": ["ai-agents","agent-orchestration","multi-agent","coding-agents","consistency","decision-log","claude-code","codex","coordination"],
+  "keywords": [
+    "ai-agents",
+    "agent-orchestration",
+    "multi-agent",
+    "coding-agents",
+    "consistency",
+    "decision-log",
+    "claude-code",
+    "codex",
+    "coordination"
+  ],
   "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": { "agentguard": "dist/cli.js" },
-  "files": ["dist", "README.md", "LICENSE"],
+  "bin": {
+    "agentguard": "dist/cli.js",
+    "agentguard-mcp": "dist/mcp.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "SKILL.md"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "node --test test/*.test.js",
     "prepublishOnly": "npm run build"
   },
-  "devDependencies": { "typescript": "^5.6.0", "@types/node": "^22.0.0" },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  },
   "author": "Harsh N. Chandak",
-  "repository": { "type": "git", "url": "git+https://github.com/harsh-chandak/agentguard.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harsh-chandak/agentguard.git"
+  },
   "homepage": "https://github.com/harsh-chandak/agentguard#readme",
-  "bugs": { "url": "https://github.com/harsh-chandak/agentguard/issues" }
+  "bugs": {
+    "url": "https://github.com/harsh-chandak/agentguard/issues"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./mcp": "./dist/mcp.js"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": ">=1"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    }
+  }
 }

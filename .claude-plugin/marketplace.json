@@ -1,0 +1,8 @@
+{
+  "name": "harsh-chandak",
+  "description": "Tools for failures that don't raise errors.",
+  "owner": { "name": "Harsh N. Chandak", "url": "https://harsh-chandak.com" },
+  "plugins": [
+    { "name": "agentguard", "source": "./", "description": "Agents that can't contradict each other." }
+  ]
+}
