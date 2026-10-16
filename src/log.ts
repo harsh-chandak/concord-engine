@@ -11,6 +11,20 @@ import { kindSpec, normalizeSubject } from "./compare.js";
  * parser, which keeps the package at zero runtime dependencies.
  */
 export const DEFAULT_DIR = ".orchestraguard";
+
+/**
+ * Where the log lives: an explicit flag, else the environment, else the
+ * default. Both the CLI and the MCP server resolve through here, because when
+ * they resolved separately they disagreed — the server wrote to the
+ * environment's directory while `check` audited the default one, so the gate
+ * and the audit were reading different files.
+ *
+ * Empty and whitespace are treated as unset. A host that expands an unset
+ * config placeholder to "" must get the default, not the process cwd.
+ */
+export function resolveDir(flag?: string, env = process.env.ORCHESTRAGUARD_DIR): string {
+  return flag?.trim() || env?.trim() || DEFAULT_DIR;
+}
 export const decisionsPath = (dir = DEFAULT_DIR) => join(dir, "decisions.jsonl");
 
 export function readDecisions(dir = DEFAULT_DIR): Decision[] {

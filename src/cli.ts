@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 import { createRequire } from "node:module";
 import { detect, escalate } from "./detect.js";
 import { KIND_IDS, kindSpec } from "./compare.js";
-import { appendDecision, readDecisions, nextId, DEFAULT_DIR } from "./log.js";
+import { appendDecision, readDecisions, nextId, DEFAULT_DIR, resolveDir } from "./log.js";
 import { conflictId, reconcile, readConflicts, writeConflict } from "./conflicts.js";
 import { banner, packet, overrideLine, report, dim, green, red } from "./format.js";
 import { extractRoutes, sourceFiles, verifyRoutes } from "./detectors/routes.js";
@@ -24,8 +24,9 @@ orchestraguard — agents that can't contradict each other.
   orchestraguard report         how often conflicts reached a human
   orchestraguard kinds          the decision kinds and their value shapes
 
-  --dir <path>   where the log lives (default ${DEFAULT_DIR})
+  --dir <path>   where the log lives (default ${DEFAULT_DIR}, or $ORCHESTRAGUARD_DIR)
   --json         machine-readable output
+  --version      print the version and exit
 
 Decisions are issued by leads and the PM. Workers write code and issue none.
 Contradiction is decided by comparison, never by a model.
@@ -47,12 +48,15 @@ async function main(): Promise<number> {
       as: { type: "string" }, layer: { type: "string" }, rationale: { type: "string" },
       supersedes: { type: "string" }, note: { type: "string" },
       dir: { type: "string" }, json: { type: "boolean" }, help: { type: "boolean", short: "h" },
+      version: { type: "boolean", short: "v" },
     },
   });
   const cmd = positionals[0] ?? "help";
-  const dir = values.dir ?? DEFAULT_DIR;
+  const dir = resolveDir(values.dir);
   const quiet = Boolean(values.json) || !process.stdout.isTTY;
   const show = (s: string) => { if (!quiet) process.stdout.write(s); };
+
+  if (values.version || cmd === "version") { console.log(VERSION); return 0; }
 
   if (values.help || cmd === "help") { show(banner(VERSION)); console.log(USAGE); return 0; }
 

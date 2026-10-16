@@ -100,6 +100,16 @@ Five kinds, each with its own comparison rule:
 | `enum` | `["pending","paid","shipped"]` | set equality |
 | `schema` | `{"field":"id","type":"uuid","nullable":false}` | structurally |
 
+## Where the log lives
+
+`.orchestraguard/decisions.jsonl`, in the working directory — append-only JSON
+Lines, one decision per line, no parser needed to read it.
+
+**Commit it.** The log is the contract between your agents, so it has to travel
+with the code the way a migration does. Set `ORCHESTRAGUARD_DIR` or pass
+`--dir` to put it elsewhere; the CLI and the MCP server resolve the location
+the same way, so `check` always audits the file the server writes.
+
 ## Who resolves what
 
 ```

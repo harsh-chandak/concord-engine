@@ -2,7 +2,7 @@ node_modules/
 dist/
 *.log
 .DS_Store
-.agentguard/
+.orchestraguard/
 
 # brag video build artefacts (rendered assets/ outputs ARE committed)
 brag/frames/

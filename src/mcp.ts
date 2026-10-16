@@ -12,12 +12,12 @@
 import { createRequire } from "node:module";
 import { detect, escalate } from "./detect.js";
 import { KIND_IDS, kindSpec, normalizeSubject } from "./compare.js";
-import { appendDecision, readDecisions, nextId, activeDecisions, DEFAULT_DIR } from "./log.js";
+import { appendDecision, readDecisions, nextId, activeDecisions, resolveDir } from "./log.js";
 import { conflictId, reconcile, readConflicts, writeConflict } from "./conflicts.js";
 import type { Decision, Layer } from "./types.js";
 
 const VERSION: string = createRequire(import.meta.url)("../package.json").version;
-const DIR = process.env.ORCHESTRAGUARD_DIR ?? DEFAULT_DIR;
+const DIR = resolveDir();
 
 async function loadSdk() {
   try {
