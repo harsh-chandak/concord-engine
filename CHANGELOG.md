@@ -37,6 +37,30 @@ subprocesses.
 - `--version` / `-v`.
 - MCP tools for the loop, alongside the existing five.
 
+### Fixed — all four found by running the loop on a second project
+
+A URL shortener built by four workers who never saw each other's code. It
+works, and it exposed four defects that building orchestraguard with
+orchestraguard did not.
+
+- **`decide` did not gate.** The MCP server refused a contradicting decision
+  from the first release while the CLI recorded it silently, so which
+  interface a worker used decided whether the product's central promise held
+  — and the generated brief promised a refusal the CLI never performed.
+  `decide` now refuses by default; a deliberate disagreement is recorded with
+  an explicit flag, for `check` to surface.
+- **`mayDecide` was advisory.** A unit told it could not settle a `naming`
+  decision settled one anyway. `decide --contract <id> --unit <id>` now
+  enforces it, and the brief emits that exact command.
+- **api-contract decisions lost the authored path.** `parse()` stored
+  `normalizePath(path)`, so `/api/links/:code` became `/api/links/:p` in the
+  log and the brief handed workers a parameter name nobody chose.
+  Normalisation is how two paths are compared, not what a path is.
+- **`verify` could never match a parameterised route.** It compared
+  extractRoutes' normalised output against the decision's raw path, so every
+  route with a parameter reported "not served" — the detector was unusable
+  for precisely the routes most likely to drift.
+
 ### Fixed
 
 - The log directory is resolved in one place by both the CLI and the MCP

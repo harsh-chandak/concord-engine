@@ -32,7 +32,10 @@ jobs:
         run: |
           D=$(mktemp -d)
           node dist/cli.js decide --dir "$D" --kind naming --subject "user id" --value user_id --as backend-lead
-          node dist/cli.js decide --dir "$D" --kind naming --subject "User ID" --value userId --as frontend-lead
+          # --force: this step exists to create the disagreement that `check`
+          # must then find. Since 0.2.0 `decide` refuses a contradiction by
+          # default, so recording one is now an explicit act.
+          node dist/cli.js decide --dir "$D" --kind naming --subject "User ID" --value userId --as frontend-lead --force
           if node dist/cli.js check --dir "$D" --json > out.json; then
             echo "REGRESSION: two leads disagreed and check exited 0"; exit 1
           fi

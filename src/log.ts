@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { Decision } from "./types.js";
+import type { Decision, Kind } from "./types.js";
 import { kindSpec, normalizeSubject } from "./compare.js";
 
 /**
@@ -22,6 +22,29 @@ export const DEFAULT_DIR = ".orchestraguard";
  * Empty and whitespace are treated as unset. A host that expands an unset
  * config placeholder to "" must get the default, not the process cwd.
  */
+/**
+ * The decision already in force that a proposed one cannot coexist with, or
+ * null. Extracted because `decide`, `bind` and the MCP gate each answered this
+ * question separately and gave different answers — the CLI recorded what the
+ * MCP server refused, so a worker following its brief was told a refusal would
+ * come and it never did.
+ */
+export function findContradiction(
+  active: Decision[],
+  kind: Kind,
+  subject: string,
+  value: unknown,
+): Decision | null {
+  const spec = kindSpec(kind);
+  const key = `${kind}::${normalizeSubject(subject)}`;
+  const parsed = spec.parse(value);
+  for (const d of active) {
+    if (`${d.kind}::${normalizeSubject(d.subject)}` !== key) continue;
+    if (spec.conflicts(spec.parse(d.value), parsed)) return d;
+  }
+  return null;
+}
+
 export function resolveDir(flag?: string, env = process.env.ORCHESTRAGUARD_DIR): string {
   return flag?.trim() || env?.trim() || DEFAULT_DIR;
 }

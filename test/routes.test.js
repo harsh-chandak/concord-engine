@@ -88,3 +88,34 @@ test("vendored and build directories are skipped", () => {
     assert.deepEqual(paths, ["/mine"]);
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
+
+// REGRESSION: verifyRoutes compared extractRoutes' output, which collapses
+// every parameter to :p, against the decision's path as authored. No source
+// spelling could satisfy a decision containing a parameter, so every
+// parameterised route was reported "route not served" — the detector was
+// unusable for exactly the routes most likely to drift. Found by a worker on
+// the linkfold run when a served GET /api/links/:code came back NOT SERVED.
+test("REGRESSION: a parameterised route verifies against its authored spelling", () => {
+  const decision = {
+    id: "d-1", kind: "api-contract", subject: "link resolution",
+    value: { method: "GET", path: "/api/links/:code", status: 200 },
+    layer: "lead", author: "api", supersedes: null, at: "",
+  };
+  const served = [{ method: "GET", path: "/api/links/:p", file: "src/api.js", line: 1 }];
+  assert.deepEqual(verifyRoutes([decision], served), [],
+    "the same route spelled two ways must verify");
+});
+
+test("REGRESSION: a genuinely missing parameterised route is still caught", () => {
+  // The fix must not make verify blind: normalising both sides cannot be
+  // allowed to make everything match everything.
+  const decision = {
+    id: "d-1", kind: "api-contract", subject: "link resolution",
+    value: { method: "GET", path: "/api/links/:code", status: 200 },
+    layer: "lead", author: "api", supersedes: null, at: "",
+  };
+  const served = [{ method: "GET", path: "/api/users/:p", file: "src/api.js", line: 1 }];
+  const out = verifyRoutes([decision], served);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].reason, "route not served");
+});

@@ -163,3 +163,24 @@ test("path normalization collapses every param style", () => {
 test("subject normalization strips case, punctuation and accents", () => {
   assert.equal(normalizeSubject("  Órder  Status! "), "order status");
 });
+
+// REGRESSION: api-contract's parse() stored normalizePath(path), which
+// rewrites every parameter to :p. The authored "/api/links/:code" was
+// therefore lost at write time, and the brief handed workers
+// "GET /api/links/:p" — a parameter name no one chose. Normalisation is how
+// two paths are compared, not what a path is.
+test("REGRESSION: an api-contract decision keeps the path as authored", () => {
+  const spec = kindSpec("api-contract");
+  const v = spec.parse({ method: "get", path: "/api/links/:code", status: 200 });
+  assert.equal(v.path, "/api/links/:code", "the authored parameter name must survive");
+  assert.match(spec.render(v), /\/api\/links\/:code/);
+});
+
+test("paths that differ only in param style still conflict-match", () => {
+  const spec = kindSpec("api-contract");
+  const a = spec.parse({ method: "GET", path: "/api/links/:code", status: 200 });
+  const b = spec.parse({ method: "GET", path: "/api/links/{id}/", status: 200 });
+  assert.equal(spec.conflicts(a, b), false, "same route, same status, two spellings");
+  const c = spec.parse({ method: "GET", path: "/api/links/{id}", status: 404 });
+  assert.equal(spec.conflicts(a, c), true, "same route, different status");
+});

@@ -18,7 +18,7 @@ kind_case() {
   else bad "$label: identical values agree" "flagged a conflict that isn't one"; fi
   d=$(fresh)
   $CLI decide --dir "$d" --kind "$kind" --subject "s" --value "$a" --as lead-a >/dev/null 2>&1
-  $CLI decide --dir "$d" --kind "$kind" --subject "s" --value "$b" --as lead-b >/dev/null 2>&1
+  $CLI decide --dir "$d" --kind "$kind" --subject "s" --value "$b" --as lead-b --force >/dev/null 2>&1
   local n; n=$($CLI check --dir "$d" --json 2>/dev/null | node -e "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>{try{console.log(JSON.parse(s).conflicts.length)}catch{console.log('ERR')}})")
   [ "$n" = "1" ] && ok "$label: differing values conflict" || bad "$label: differing values conflict" "got $n conflicts"
 }
@@ -37,7 +37,7 @@ $CLI check --dir "$d" --json >/dev/null 2>&1 && ok "PM overrides a lead (no conf
 
 d=$(fresh)
 $CLI decide --dir "$d" --kind naming --subject s --value a --as pm-a --layer pm >/dev/null 2>&1
-$CLI decide --dir "$d" --kind naming --subject s --value b --as pm-b --layer pm >/dev/null 2>&1
+$CLI decide --dir "$d" --kind naming --subject s --value b --as pm-b --layer pm --force >/dev/null 2>&1
 o=$($CLI check --dir "$d" --json 2>/dev/null | node -e "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>{try{console.log(JSON.parse(s).conflicts[0].owner)}catch{console.log('ERR')}})")
 [ "$o" = "human" ] && ok "two PMs reach the human" || bad "two PMs reach the human" "owner=$o"
 
@@ -50,7 +50,7 @@ $CLI check --dir "$d" --json >/dev/null 2>&1 && ok "supersession clears the conf
 echo "ESCALATION"
 d=$(fresh)
 $CLI decide --dir "$d" --kind naming --subject s --value a --as lead-a >/dev/null 2>&1
-$CLI decide --dir "$d" --kind naming --subject s --value b --as lead-b >/dev/null 2>&1
+$CLI decide --dir "$d" --kind naming --subject s --value b --as lead-b --force >/dev/null 2>&1
 id=$($CLI check --dir "$d" --json 2>/dev/null | node -e "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>{console.log(JSON.parse(s).conflicts[0].stored.id)})")
 $CLI attempt "$id" --dir "$d" --note one >/dev/null 2>&1
 mid=$($CLI check --dir "$d" --json 2>/dev/null | node -e "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>{console.log(JSON.parse(s).conflicts[0].stored.owner)})")

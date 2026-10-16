@@ -60,7 +60,11 @@ export const KINDS: Record<Kind, KindSpec> = {
     parse(raw) {
       const o = obj(raw, "api-contract");
       const method = asString(o.method, "method").toUpperCase();
-      const path = normalizePath(asString(o.path, "path"));
+      // Keep the path AS AUTHORED. Normalisation is how two paths are
+      // compared, not what a path is: storing the normalised form rewrote
+      // "/api/links/:code" to "/api/links/:p" in the log, so the brief told
+      // workers the parameter was named `p`.
+      const path = asString(o.path, "path");
       const status = o.status === undefined ? null : Number(o.status);
       if (status !== null && !Number.isInteger(status)) {
         throw new Error(`status must be an integer, got ${JSON.stringify(o.status)}`);
@@ -70,7 +74,8 @@ export const KINDS: Record<Kind, KindSpec> = {
     conflicts(a, b) {
       const x = a as { method: string; path: string; status: number | null };
       const y = b as typeof x;
-      if (x.method !== y.method || x.path !== y.path) return true;
+      if (x.method !== y.method) return true;
+      if (normalizePath(x.path) !== normalizePath(y.path)) return true;
       // An unspecified status doesn't contradict a specified one.
       if (x.status === null || y.status === null) return false;
       return x.status !== y.status;

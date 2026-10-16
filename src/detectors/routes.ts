@@ -73,7 +73,13 @@ export function verifyRoutes(decisions: Decision[], served: ServedRoute[]): Viol
   for (const d of activeDecisions(decisions)) {
     if (d.kind !== "api-contract") continue;
     const want = d.value as { method: string; path: string; status: number | null };
-    const samePath = served.filter((s) => s.path === want.path);
+    // Both sides must be normalised. extractRoutes() already collapses
+    // every parameter to :p, while the decision keeps the path as it was
+    // authored — comparing those directly meant no source spelling could
+    // ever satisfy a decision with a parameter in it, so every
+    // parameterised route was reported NOT SERVED.
+    const wantPath = normalizePath(want.path);
+    const samePath = served.filter((s) => normalizePath(s.path) === wantPath);
     if (samePath.length === 0) {
       out.push({ decision: d, reason: "route not served", expected: `${want.method} ${want.path}` });
       continue;
