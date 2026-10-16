@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.1 — what 0.2.0 should have contained
+
+**0.2.0 on npm is a build of an older tree.** Its tarball has none of the five
+fixes listed below: no `openSubjects`, no `declaredSubjects` in the CLI, and
+`normalizePath()` still inside `api-contract`'s `parse()`. The work was
+committed, CI-green and pushed before the publish ran, and nothing in the
+publish path noticed the artefact did not match the repository. The MCP
+registry then registered that version. Use 0.2.1.
+
+`prepublishOnly` now runs `scripts/prepublish-guard.mjs`, which refuses to
+publish unless the working tree is clean, HEAD is on main, and HEAD is what
+origin has — and prints the commit so the publish log records what shipped.
+It also runs the test suite, which it did not before.
+
 ## 0.2.0 — the loop
 
 v0.1 was the gate: agents record typed decisions, and a decision that
