@@ -1,28 +1,46 @@
 {
   "name": "agentguard",
   "displayName": "agentguard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Agents that can't contradict each other. A decision log for hierarchical coding agents, with deterministic contradiction detection and an escalation ladder.",
-  "author": { "name": "Harsh N. Chandak", "url": "https://harsh-chandak.com" },
+  "author": {
+    "name": "Harsh N. Chandak",
+    "url": "https://harsh-chandak.com"
+  },
   "homepage": "https://github.com/harsh-chandak/agentguard",
   "repository": "https://github.com/harsh-chandak/agentguard",
   "documentationUrl": "https://github.com/harsh-chandak/agentguard#readme",
   "supportUrl": "https://github.com/harsh-chandak/agentguard/issues",
   "license": "MIT",
-  "keywords": ["ai-agents", "agent-orchestration", "multi-agent", "coordination", "consistency"],
+  "keywords": [
+    "ai-agents",
+    "agent-orchestration",
+    "multi-agent",
+    "coordination",
+    "consistency"
+  ],
   "userConfig": {
     "decisions_dir": {
       "type": "directory",
       "title": "Decision log directory",
-      "description": "Where decisions and conflicts are stored. Defaults to .agentguard in the project. Commit it — the log is the shared contract.",
+      "description": "Where decisions and conflicts are stored. Defaults to .agentguard in the project. Commit it \u2014 the log is the shared contract.",
       "required": false
     }
   },
   "mcpServers": {
     "agentguard": {
       "command": "npx",
-      "args": ["-y", "-p", "@harsh-chandak/agentguard", "-p", "@modelcontextprotocol/sdk", "agentguard-mcp"],
-      "env": { "AGENTGUARD_DIR": "${user_config.decisions_dir}" }
+      "args": [
+        "-y",
+        "-p",
+        "@harsh-chandak/agentguard",
+        "-p",
+        "@modelcontextprotocol/sdk",
+        "agentguard-mcp"
+      ],
+      "env": {
+        "AGENTGUARD_DIR": "${user_config.decisions_dir}"
+      }
     }
   }
 }
