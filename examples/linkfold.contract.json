@@ -1,0 +1,153 @@
+{
+  "id": "linkfold",
+  "goal": "Ship a URL shortener as three independent units that agree on one wire format without talking to each other.",
+  "scope": {
+    "in": [
+      "an in-memory store",
+      "an HTTP API",
+      "a browser-side client",
+      "an integration test that exercises all three"
+    ],
+    "out": [
+      "persistence to disk",
+      "authentication",
+      "rate limiting",
+      "a real UI"
+    ]
+  },
+  "decisions": [
+    {
+      "kind": "naming",
+      "subject": "short code field in payloads",
+      "value": "code",
+      "rationale": "three units serialise this field and a disagreement here is invisible until integration"
+    },
+    {
+      "kind": "api-contract",
+      "subject": "link creation endpoint",
+      "value": {
+        "method": "POST",
+        "path": "/api/links",
+        "status": 201
+      },
+      "rationale": "201 is correct for resource creation and the client branches on it"
+    },
+    {
+      "kind": "api-contract",
+      "subject": "link resolution endpoint",
+      "value": {
+        "method": "GET",
+        "path": "/api/links/:code",
+        "status": 200
+      },
+      "rationale": "resolution is a read, not a redirect, so the client can decide what to do with the target"
+    },
+    {
+      "kind": "enum",
+      "subject": "link status values",
+      "value": [
+        "active",
+        "expired",
+        "disabled"
+      ],
+      "rationale": "the store writes it, the api serialises it and the client renders it"
+    }
+  ],
+  "units": [
+    {
+      "id": "store",
+      "goal": "An in-memory link store: create a record with a generated code, look one up, and expose its status.",
+      "files": [
+        "src/store.js",
+        "test/store.test.js"
+      ],
+      "mayDecide": [
+        "schema"
+      ],
+      "dependsOn": [],
+      "notes": "Pure module, no HTTP. Export createStore() returning { create, get, all }."
+    },
+    {
+      "id": "api",
+      "goal": "An HTTP server over the store implementing the two decided endpoints, using node:http only.",
+      "files": [
+        "src/api.js",
+        "test/api.test.js"
+      ],
+      "mayDecide": [
+        "convention"
+      ],
+      "dependsOn": [],
+      "notes": "Export createServer(store). Import the store from ../src/store.js and assume it exists with createStore(); do not write it."
+    },
+    {
+      "id": "web",
+      "goal": "A browser-side client module that calls the two decided endpoints and surfaces errors to the caller.",
+      "files": [
+        "src/web.js",
+        "test/web.test.js"
+      ],
+      "mayDecide": [
+        "convention"
+      ],
+      "dependsOn": [],
+      "notes": "Export createClient(baseUrl, fetchImpl). Inject fetch so it is testable without a network."
+    },
+    {
+      "id": "integration",
+      "goal": "Boot the real server over the real store and drive it with the real client: create a link, resolve it, and miss on an unknown code.",
+      "files": [
+        "test/integration.test.js"
+      ],
+      "mayDecide": [],
+      "dependsOn": [
+        "store",
+        "api",
+        "web"
+      ]
+    }
+  ],
+  "acceptance": [
+    {
+      "id": "a-store",
+      "statement": "the store creates and resolves records",
+      "check": "test -f src/store.js && node --test test/store.test.js",
+      "unit": "store"
+    },
+    {
+      "id": "a-api",
+      "statement": "the api serves both decided endpoints",
+      "check": "test -f src/api.js && node --test test/api.test.js",
+      "unit": "api"
+    },
+    {
+      "id": "a-web",
+      "statement": "the client calls both endpoints and reports errors",
+      "check": "test -f src/web.js && node --test test/web.test.js",
+      "unit": "web"
+    },
+    {
+      "id": "a-integration",
+      "statement": "all three units work together over real HTTP",
+      "check": "test -f test/integration.test.js && node --test test/integration.test.js",
+      "unit": "integration"
+    }
+  ],
+  "openSubjects": [
+    {
+      "kind": "convention",
+      "subject": "error response body shape",
+      "note": "the server serialises it and the client parses it; settle it once"
+    },
+    {
+      "kind": "naming",
+      "subject": "long url field in payloads",
+      "note": "the contract names the short code but not the destination"
+    },
+    {
+      "kind": "schema",
+      "subject": "store create() argument shape",
+      "note": "an in-process interface two units share; the wire format does not cover it"
+    }
+  ]
+}

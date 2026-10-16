@@ -363,6 +363,23 @@ chars-per-token assumption behind it. The baseline is the whole contract per
 worker, not your real session — your actual saving is larger, and this tool
 will not guess by how much.
 
+## A worked example
+
+`examples/linkfold.contract.json` is the contract from the run this README
+keeps citing: a URL shortener built by four workers who never saw each other's
+code, which came out working — 55 tests and a real HTTP round trip between
+three units that agreed on a wire format they never discussed.
+
+It carries the `openSubjects` the original run was missing, which is why that
+run settled the error format twice under two names. CI revalidates it on every
+push.
+
+```bash
+orchestraguard spec --from examples/linkfold.contract.json
+orchestraguard fleet --contract linkfold
+orchestraguard brief --contract linkfold api
+```
+
 ## Honest limits
 
 - **Only what's recorded is checked.** A lead who decides something in prose and

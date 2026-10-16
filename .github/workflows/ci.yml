@@ -27,6 +27,8 @@ jobs:
           # If a change breaks the validator, it breaks here before it breaks
           # for anyone who wrote a contract against the published schema.
           node dist/cli.js spec --from .orchestraguard/contracts/orchestraguard-v2.json --dir "$(mktemp -d)"
+          # The worked example is cited in the README; it must stay valid too.
+          node dist/cli.js spec --from examples/linkfold.contract.json --dir "$(mktemp -d)"
 
       - name: the gate must still refuse a contradicting decision
         run: |
