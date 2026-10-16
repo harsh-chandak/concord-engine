@@ -20,7 +20,7 @@ parallel run:
 orchestraguard answers it by comparison, never by a model, and refuses the
 second answer at the moment it is written.
 
-[![A real Claude Code session: a refunds feature is split across four workers, two of them settle the error format differently, and the second is refused with the decision already in force, who made it and why.](assets/brag.gif)](https://github.com/harsh-chandak/orchestraguard/blob/main/assets/brag.mp4)
+[![A real Claude Code session: a refunds feature is split across four workers, two of them settle the error format differently, and the second is refused with the decision already in force, who made it and why.](assets/brag.gif)](https://github.com/harsh-chandak/orchestraguard/blob/main/assets/brag.gif)
 
 <sub>Recorded, not drawn. `brag/record.mjs` runs the real CLI and captures its
 output verbatim; `brag/video.html` only renders what was captured.</sub>

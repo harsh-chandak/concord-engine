@@ -9,3 +9,7 @@ brag/node_modules/
 brag/palette.png
 brag/package.json
 brag/package-lock.json
+
+# the mp4 is a build artefact: the directory only accepts text, SVG,
+# PNG/JPEG/GIF/WebP and fonts, and any other binary is held for a reviewer
+assets/brag.mp4
