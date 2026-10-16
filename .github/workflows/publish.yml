@@ -41,9 +41,18 @@ jobs:
           # The release assets carry no version in their filename — the
           # version lives only in the tag — so resolve the tag and keep the
           # asset name fixed.
+          # Download, verify, then extract — never pipe a download into a
+          # program. The plugin directory's scan flags curl-into-shell as an
+          # install-time risk and shows that to anyone installing the plugin,
+          # and the warning is fair: a piped download runs whatever arrives.
           TAG="$(curl -fsSL https://api.github.com/repos/modelcontextprotocol/registry/releases/latest | jq -r .tag_name)"
-          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/${TAG}/mcp-publisher_linux_amd64.tar.gz" \
-            | tar xz mcp-publisher
+          VER="${TAG#v}"
+          BASE="https://github.com/modelcontextprotocol/registry/releases/download/${TAG}"
+          curl -fsSL -o mcp-publisher_linux_amd64.tar.gz "${BASE}/mcp-publisher_linux_amd64.tar.gz"
+          curl -fsSL -o checksums.txt "${BASE}/registry_${VER}_checksums.txt"
+          grep " mcp-publisher_linux_amd64.tar.gz$" checksums.txt | sha256sum --check --status
+          echo "checksum verified"
+          tar xzf mcp-publisher_linux_amd64.tar.gz mcp-publisher
           chmod +x mcp-publisher
           ./mcp-publisher --version
 
