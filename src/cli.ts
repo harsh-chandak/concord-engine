@@ -6,6 +6,7 @@ import { KIND_IDS, kindSpec } from "./compare.js";
 import { appendDecision, readDecisions, nextId, DEFAULT_DIR } from "./log.js";
 import { conflictId, reconcile, readConflicts, writeConflict } from "./conflicts.js";
 import { banner, packet, overrideLine, report, dim, green, red } from "./format.js";
+import { extractRoutes, sourceFiles, verifyRoutes } from "./detectors/routes.js";
 import type { Decision, Layer } from "./types.js";
 
 const VERSION: string = createRequire(import.meta.url)("../package.json").version;
@@ -19,6 +20,7 @@ agentguard — agents that can't contradict each other.
   agentguard check          detect contradictions; exit 1 if any are open
   agentguard conflicts      what is open, and whose turn it is
   agentguard attempt <id>   record a failed resolution attempt; escalates on the 2nd
+  agentguard verify [path]  check api-contract decisions against the code
   agentguard report         how often conflicts reached a human
   agentguard kinds          the decision kinds and their value shapes
 
@@ -110,6 +112,31 @@ async function main(): Promise<number> {
     }
     for (const f of result.conflicts) console.log(packet(f, byId.get(conflictId(f))));
     console.log(`  ${red(String(result.conflicts.length))} open ${result.conflicts.length === 1 ? "conflict" : "conflicts"}\n`);
+    return 1;
+  }
+
+  if (cmd === "verify") {
+    const root = positionals[1] ?? ".";
+    const files = sourceFiles(root);
+    const served = extractRoutes(files);
+    const violations = verifyRoutes(readDecisions(dir), served);
+    if (values.json) {
+      console.log(JSON.stringify({ filesRead: files.length, routesFound: served.length, violations }, null, 2));
+      return violations.length ? 1 : 0;
+    }
+    show(banner(VERSION));
+    console.log(`  ${dim(`read ${files.length} files, found ${served.length} served routes`)}`);
+    if (!violations.length) {
+      console.log(`  ${green("every api-contract decision is served")}\n`);
+      return 0;
+    }
+    console.log("");
+    for (const v of violations) {
+      console.log(`  ${red("NOT SERVED")}  ${v.expected}   ${dim(`decided by ${v.decision.author} (${v.decision.layer})`)}`);
+      if (v.nearest) console.log(`              ${dim(`the path exists as ${v.nearest.method} at ${v.nearest.file}:${v.nearest.line}`)}`);
+    }
+    console.log(`\n  ${red(String(violations.length))} unserved ${violations.length === 1 ? "decision" : "decisions"}`);
+    console.log(`  ${dim("static extraction only sees literal paths; a mounted prefix or a runtime path is invisible.")}\n`);
     return 1;
   }
 
