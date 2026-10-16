@@ -44,6 +44,29 @@ bind from t=0. A worker that hits something undecided calls `record_decision`
 and gets refused if a decision already covers it. It does not pick a value and
 move on.
 
+## Name the open questions before you fan out
+
+The gate finds a contradiction by comparing decisions that share a subject,
+and subjects are matched by wording — folded for case, punctuation and
+accents, but not for meaning. Two workers who call one thing "error response
+body shape" and "api error response body" have made two unrelated decisions,
+and a disagreement between them is never detected.
+
+So when you author the contract, list anything you know will need settling
+under `openSubjects`, even if you cannot settle it yet:
+
+```json
+"openSubjects": [
+  { "kind": "convention", "subject": "error response body shape",
+    "note": "the server and the client both serialise this" }
+]
+```
+
+Each worker's brief then names those subjects verbatim, and
+`decide --contract <id> --unit <id>` refuses any subject the contract did not
+declare, offering the declared spelling instead. Pass `--unit` — without it
+that check does not run.
+
 ## The loop
 
 ### 1. Author the contract

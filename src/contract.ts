@@ -51,6 +51,18 @@ export const SCHEMA = {
         },
       },
     },
+    openSubjects: {
+      type: "array",
+      description: "things this run will have to settle but has not. Workers must reuse these exact subject strings, because the gate matches subjects by wording — two spellings of one subject are two unrelated decisions and will not be compared.",
+      items: {
+        type: "object", required: ["kind", "subject"], additionalProperties: false,
+        properties: {
+          kind: { enum: [...KIND_IDS] },
+          subject: { type: "string", minLength: 1 },
+          note: { type: "string" },
+        },
+      },
+    },
     units: {
       type: "array", minItems: 1,
       description: "one worker each",
@@ -144,6 +156,31 @@ export function validateContract(raw: unknown): Contract {
       if (spec.conflicts(spec.parse(prior.value), spec.parse(d.value))) {
         bad(`decisions contradict each other on "${d.subject}": ${spec.render(spec.parse(prior.value))} vs ${spec.render(spec.parse(d.value))}`);
       }
+    }
+  }
+
+  // --- open subjects ---------------------------------------------------
+  if (c.openSubjects !== undefined) {
+    if (!Array.isArray(c.openSubjects)) bad("openSubjects must be an array");
+    else {
+      const decided = new Set(decisions.map((d) => `${d.kind}::${normalizeSubject(d.subject)}`));
+      const seen = new Set<string>();
+      c.openSubjects.forEach((o: unknown, i) => {
+        const x = o as Record<string, unknown>;
+        if (!x || typeof x !== "object") return bad(`openSubjects[${i}] must be an object`);
+        if (typeof x.kind !== "string" || !(KIND_IDS as readonly string[]).includes(x.kind)) {
+          return bad(`openSubjects[${i}].kind must be one of ${KIND_IDS.join(", ")}`);
+        }
+        if (typeof x.subject !== "string" || !x.subject.trim()) {
+          return bad(`openSubjects[${i}].subject must be a non-empty string`);
+        }
+        const key = `${x.kind}::${normalizeSubject(x.subject)}`;
+        if (decided.has(key)) {
+          bad(`"${x.subject}" is listed as open but the contract already decides it`);
+        }
+        if (seen.has(key)) bad(`openSubjects lists "${x.subject}" twice`);
+        seen.add(key);
+      });
     }
   }
 
@@ -291,6 +328,12 @@ export function briefFor(contract: Contract, unitId: string, active: Decision[] 
     .filter((a) => a.unit === unit.id)
     .map((a) => ({ id: a.id, statement: a.statement, check: a.check }));
 
+  // Only the open subjects still open: one may have been settled since the
+  // contract was written, and telling a worker to decide a decided thing is
+  // how a second spelling gets created.
+  const openForUnit = (contract.openSubjects ?? [])
+    .filter((o) => !binding.has(`${o.kind}::${normalizeSubject(o.subject)}`));
+
   const lines = [...binding.values()].map((d) => `  - [${d.kind}] ${d.subject} = ${kindSpec(d.kind).render(kindSpec(d.kind).parse(d.value))}${d.rationale ? `  (${d.rationale})` : ""}`);
 
   const instructions = [
@@ -312,6 +355,14 @@ export function briefFor(contract: Contract, unitId: string, active: Decision[] 
     `WHAT YOU MUST NOT DECIDE ALONE`,
     `  ${mustRequest.join(", ")}`,
     ``,
+    openForUnit.length ? [
+      `STILL TO BE DECIDED — use these subject lines VERBATIM`,
+      ...openForUnit.map((o) => `  [${o.kind}] ${o.subject}${o.note ? `\n      ${o.note}` : ""}`),
+      `  The gate matches subjects by wording. Rephrasing one of these creates a`,
+      `  second, unrelated decision, and a disagreement between the two will not`,
+      `  be detected. Copy the line exactly.`,
+      ``,
+    ].join("\n") : null,
     `RECORD A DECISION LIKE THIS — the flags are what enforce the two lists above`,
     `  orchestraguard decide --contract ${contract.id} --unit ${unit.id} \\`,
     `    --kind <kind> --subject "<what>" --value '<value>' --as ${unit.id} --rationale "<why>"`,
@@ -357,6 +408,24 @@ export function waves(contract: Contract): string[][] {
     ready.sort();
     out.push(ready);
     for (const id of ready) { done.add(id); pending.delete(id); }
+  }
+  return out;
+}
+
+/**
+ * Every subject this contract names, decided or open, keyed the way the gate
+ * keys them. A decision whose subject is not in here is a subject nobody
+ * declared — which is exactly how two workers end up describing one thing
+ * two ways and the contradiction goes unseen.
+ */
+export function declaredSubjects(contract: Contract): Map<string, { kind: Kind; subject: string; state: "decided" | "open" }> {
+  const out = new Map<string, { kind: Kind; subject: string; state: "decided" | "open" }>();
+  for (const d of contract.decisions) {
+    out.set(`${d.kind}::${normalizeSubject(d.subject)}`, { kind: d.kind, subject: d.subject, state: "decided" });
+  }
+  for (const o of contract.openSubjects ?? []) {
+    const key = `${o.kind}::${normalizeSubject(o.subject)}`;
+    if (!out.has(key)) out.set(key, { kind: o.kind, subject: o.subject, state: "open" });
   }
   return out;
 }

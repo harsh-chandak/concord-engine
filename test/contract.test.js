@@ -5,8 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   validateContract, briefFor, waves, saveContract, loadContract, listContracts,
-  contractsDir, contractPath, SCHEMA, ContractError,
-} from "../dist/contract.js";
+  contractsDir, contractPath, SCHEMA, ContractError, declaredSubjects } from "../dist/contract.js";
 import { KIND_IDS } from "../dist/index.js";
 
 const box = () => mkdtempSync(join(tmpdir(), "orchestraguard-contract-"));
@@ -469,4 +468,75 @@ test("saving twice overwrites in place rather than accumulating files", () => {
     assert.deepEqual(listContracts(d), ["demo-run"]);
     assert.equal(loadContract("demo-run", d).goal, "a second, later goal for the same run.");
   } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+/* ---------------------------------------------------------------- *
+ * declared subjects                                                  *
+ *                                                                    *
+ * The gate matches subjects by wording. On the first run of this loop
+ * against a second project, two workers named one thing "error response
+ * body shape" and "api error response body", chose incompatible values,
+ * and `check` reported no contradiction because it never compared them.
+ * Declaring subjects turns identity into a lookup.
+ * ---------------------------------------------------------------- */
+
+const withOpen = (openSubjects) => ({
+  id: "os", goal: "g", scope: { in: [], out: [] }, decisions: [],
+  openSubjects,
+  units: [{ id: "u", goal: "g", files: [], mayDecide: ["convention"], dependsOn: [] }],
+  acceptance: [{ id: "a", statement: "s", check: "true", unit: "u" }],
+});
+
+test("openSubjects is optional", () => {
+  const c = { ...withOpen(undefined) };
+  delete c.openSubjects;
+  assert.ok(validateContract(c));
+});
+
+test("REGRESSION: a subject cannot be both decided and open", () => {
+  const c = withOpen([{ kind: "naming", subject: "User ID!" }]);
+  c.decisions = [{ kind: "naming", subject: "user id", value: "user_id" }];
+  assert.throws(() => validateContract(c), (e) => {
+    assert.match(e.message, /listed as open but the contract already decides it/);
+    return true;
+  }, "folding must catch it across casing and punctuation, as the gate does");
+});
+
+test("openSubjects rejects a duplicate and an unknown kind", () => {
+  assert.throws(() => validateContract(withOpen([
+    { kind: "convention", subject: "error shape" },
+    { kind: "convention", subject: "Error  Shape!" },
+  ])), /lists "Error  Shape!" twice/);
+  assert.throws(() => validateContract(withOpen([{ kind: "nonsense", subject: "x" }])), /kind must be one of/);
+});
+
+test("declaredSubjects covers decided and open, keyed as the gate keys them", () => {
+  const c = withOpen([{ kind: "convention", subject: "Error Response Body Shape" }]);
+  c.decisions = [{ kind: "naming", subject: "user id", value: "user_id" }];
+  const d = declaredSubjects(validateContract(c));
+  assert.equal(d.get("naming::user id")?.state, "decided");
+  assert.equal(d.get("convention::error response body shape")?.state, "open");
+  assert.equal(d.size, 2);
+});
+
+test("a brief names the open subjects verbatim, and drops ones already settled", () => {
+  const c = validateContract(withOpen([
+    { kind: "convention", subject: "error response body shape", note: "both sides serialise it" },
+    { kind: "convention", subject: "retry policy" },
+  ]));
+  const open = briefFor(c, "u", []);
+  assert.match(open.instructions, /STILL TO BE DECIDED/);
+  assert.match(open.instructions, /error response body shape/);
+  assert.match(open.instructions, /both sides serialise it/);
+  assert.match(open.instructions, /retry policy/);
+
+  // Settled since the contract was written: telling a worker to decide it
+  // again is how a second spelling of the subject gets created.
+  const settled = briefFor(c, "u", [{
+    id: "d-1", kind: "convention", subject: "Error Response Body Shape",
+    value: "json", layer: "lead", author: "web", supersedes: null, at: "",
+  }]);
+  assert.ok(!/error response body shape/i.test(settled.instructions.split("RECORD A DECISION")[0].split("STILL TO BE DECIDED")[1] ?? ""),
+    "a settled subject must not still be listed as open");
+  assert.match(settled.instructions, /retry policy/, "the genuinely open one stays");
 });

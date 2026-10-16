@@ -223,5 +223,53 @@ echo "ISOLATION"
 [ ! -e "$ROOT/.orchestraguard/contracts/loop-ok.json" ] && ok "the repo's own log was never touched" || bad "the repo's own log was never touched" "loop-ok leaked into $ROOT/.orchestraguard"
 
 echo
+
+echo "DECLARED SUBJECTS"
+# The failure this section exists for: two workers named one subject two ways,
+# chose incompatible values, and `check` saw no contradiction because it never
+# compared them. Observed on a real run before these guards existed.
+cat > "$TMP/declared.json" <<'JSON'
+{
+  "id": "declared", "goal": "Two units settle one shared convention.",
+  "scope": { "in": ["api", "web"], "out": [] }, "decisions": [],
+  "openSubjects": [
+    { "kind": "convention", "subject": "error response body shape", "note": "both sides serialise it" }
+  ],
+  "units": [
+    { "id": "api", "goal": "serve", "files": ["src/api.js"], "mayDecide": ["convention"], "dependsOn": [] },
+    { "id": "web", "goal": "consume", "files": ["src/web.js"], "mayDecide": ["naming"], "dependsOn": [] }
+  ],
+  "acceptance": [
+    { "id": "a1", "statement": "api works", "check": "true", "unit": "api" },
+    { "id": "a2", "statement": "web works", "check": "true", "unit": "web" }
+  ]
+}
+JSON
+out=$(og spec --from "$TMP/declared.json" 2>&1)
+[ $? -eq 0 ] && ok "a contract may declare open subjects" || bad "a contract may declare open subjects" "$out"
+
+out=$(og brief --contract declared api 2>&1)
+has "$out" "STILL TO BE DECIDED" && ok "the brief names what is still open" || bad "the brief names what is still open" "no open section"
+has "$out" "error response body shape" && ok "the brief gives the exact subject line" || bad "the brief gives the exact subject line" "subject missing"
+
+out=$(og decide --contract declared --unit api --kind convention --subject "error response body shape" --value 'json {"error":"<message>"}' --as api --rationale "shown to a person" 2>&1)
+[ $? -eq 0 ] && ok "a declared subject is accepted" || bad "a declared subject is accepted" "$out"
+
+out=$(og decide --contract declared --unit api --kind convention --subject "api error response body" --value 'json {"error":"<code>"}' --as api --rationale "machine readable" 2>&1)
+[ $? -ne 0 ] && ok "a rephrased subject is refused" || bad "a rephrased subject is refused" "exit 0"
+has "$out" "is not a subject contract" && ok "the refusal says the subject is undeclared" || bad "the refusal says the subject is undeclared" "$out"
+has "$out" "error response body shape" && ok "the refusal offers the declared spelling" || bad "the refusal offers the declared spelling" "$out"
+
+out=$(og decide --contract declared --unit api --kind convention --subject "error response body shape" --value 'json {"error":"<code>"}' --as api --rationale "machine readable" 2>&1)
+[ $? -ne 0 ] && ok "the same subject with a different value is refused" || bad "the same subject with a different value is refused" "exit 0"
+has "$out" "contradicts a decision already in force" && ok "the refusal names the decision in force" || bad "the refusal names the decision in force" "$out"
+
+out=$(og decide --contract declared --unit web --kind naming --subject "destination field" --value url --as web --new-subject 2>&1)
+[ $? -eq 0 ] && ok "--new-subject allows a genuinely new subject" || bad "--new-subject allows a genuinely new subject" "$out"
+
+out=$(og decide --contract declared --unit web --kind convention --subject "error response body shape" --value 'anything' --as web 2>&1)
+[ $? -ne 0 ] && ok "a unit may not decide a kind outside its mayDecide" || bad "a unit may not decide a kind outside its mayDecide" "exit 0"
+has "$out" "may not decide" && ok "the refusal says which kinds the unit may decide" || bad "the refusal says which kinds the unit may decide" "$out"
+
 printf "%d passed, %d failed\n" "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -112,6 +112,10 @@ Every loop command takes `--contract`. The MCP server exposes the same set as
 
 One JSON document. The agent writes it; the package decides whether it holds.
 
+`openSubjects` is the part people skip and shouldn't. Naming a thing before
+anyone decides it is what stops two workers inventing two different names for
+it — see **Honest limits** for the run where that went wrong.
+
 ```jsonc
 {
   "id": "add-refunds",
@@ -121,6 +125,10 @@ One JSON document. The agent writes it; the package decides whether it holds.
     { "kind": "api-contract", "subject": "refund endpoint",
       "value": { "method": "POST", "path": "/api/refunds", "status": 201 },
       "rationale": "why this and not the alternative" }
+  ],
+  "openSubjects": [                   // known to need deciding, not yet decided
+    { "kind": "convention", "subject": "error response body shape",
+      "note": "the server and the client both serialise this" }
   ],
   "units": [                          // one worker each
     { "id": "api", "goal": "...", "files": ["src/api/**"],
@@ -359,10 +367,30 @@ will not guess by how much.
 
 - **Only what's recorded is checked.** A lead who decides something in prose and
   never records it is invisible to this.
-- **Subjects are matched loosely** — case, punctuation and accents are
-  normalised, so "User Identifier" and "user identifier" collide. Two leads who
-  describe the same thing in genuinely different words still won't. That's a
-  real miss.
+- **Subjects are matched by wording, not by meaning.** Case, punctuation and
+  accents are normalised, so "User Identifier" and "user identifier" collide.
+  Two agents who describe the same thing in genuinely different words do not.
+  This is the tool's sharpest edge, and it is not theoretical: on the first
+  run of this loop against another project, two workers settled the error
+  format under "error response body shape" and "api error response body",
+  chose incompatible payloads, and `check` reported no contradiction because
+  it never compared them.
+
+  The mitigation is `openSubjects`: name the thing in the contract before
+  anyone decides it, and `decide --contract <id> --unit <id>` refuses a
+  subject the contract never declared, offering the declared spelling instead.
+  That makes subject identity a lookup rather than a guess. Matching subjects
+  by similarity would close the gap too, and would put a judgement back in the
+  decision path — which is the one thing this package will not do.
+
+  The residual risk is real: a decision recorded without `--contract`, or with
+  `--new-subject`, is matched by wording again.
+- **`verify` only recognises Express-shaped registrations.** It looks for
+  `app`/`router`/`server`/`api` followed by a method call, plus FastAPI and
+  Flask decorators. A plain `node:http` server that switches on
+  `req.url` serves routes it cannot see. Broadening the pattern to any
+  identifier would make `cache.get("key")` look like a route, so it stays
+  narrow and under-reports.
 - **`verify` reads literal paths only.** A router mounted under a prefix, or a
   path built at runtime, is invisible to static extraction. It under-reports
   rather than accusing falsely, and prints how many files it read so the number
@@ -378,6 +406,10 @@ will not guess by how much.
   contract named. If the contract named weak commands, it will pass.
 - **It doesn't judge which decision is better.** It reports that two can't both
   hold, and who gets to rule.
+- **A worker can still bypass the gate.** `decide` without `--unit` skips the
+  check on what that unit may decide, and `--force` records a contradiction
+  deliberately. Both are visible in the log, and `report` counts them. The
+  gate is a guardrail, not a sandbox.
 - **Five kinds, deliberately.** `dependency` is deferred until semver range
   intersection is implemented properly; a comparator that calls `^1.0.0` and
   `^1.2.0` incompatible would be worse than not having it.

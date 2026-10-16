@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { detect, escalate } from "./detect.js";
 import { KIND_IDS, kindSpec, normalizeSubject } from "./compare.js";
 import { appendDecision, readDecisions, nextId, activeDecisions, findContradiction, DEFAULT_DIR, resolveDir } from "./log.js";
-import { SCHEMA, validateContract, saveContract, loadContract, briefFor, waves } from "./contract.js";
+import { SCHEMA, validateContract, saveContract, loadContract, briefFor, waves, declaredSubjects } from "./contract.js";
 import { runAcceptance, generateDocs, costReport } from "./run.js";
 import { conflictId, reconcile, readConflicts, writeConflict } from "./conflicts.js";
 import { banner, packet, overrideLine, report, dim, green, red } from "./format.js";
@@ -72,6 +72,7 @@ async function main(): Promise<number> {
       dir: { type: "string" }, json: { type: "boolean" }, help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" }, force: { type: "boolean" },
       schema: { type: "boolean" }, from: { type: "string" }, contract: { type: "string" },
+      "new-subject": { type: "boolean" },
       unit: { type: "string" }, out: { type: "string" },
     },
   });
@@ -115,6 +116,24 @@ async function main(): Promise<number> {
       const c = loadContract(requireContract(values, positionals), dir);
       const unit = c.units.find((u) => u.id === values.unit);
       if (!unit) { console.error(`no unit "${values.unit}" in contract "${c.id}": ${c.units.map((u) => u.id).join(", ")}`); return 2; }
+      // A subject the contract never named is how two workers describe one
+      // thing two ways. The gate compares subjects by wording, so the second
+      // spelling is simply a different decision and the disagreement between
+      // them is never seen. Refusing here is the only deterministic fix —
+      // matching subjects by similarity would put a judgement back in the
+      // decision path.
+      const declared = declaredSubjects(c);
+      const key = `${values.kind}::${normalizeSubject(values.subject!)}`;
+      if (!declared.has(key) && !values["new-subject"]) {
+        const sameKind = [...declared.values()].filter((d) => d.kind === values.kind);
+        console.error(`${red("refused")} "${values.subject}" is not a subject contract "${c.id}" declares.`);
+        console.error(sameKind.length
+          ? `  declared ${values.kind} subjects:\n${sameKind.map((d) => `    ${d.state === "open" ? "(open)    " : "(decided) "}${d.subject}`).join("\n")}`
+          : `  the contract declares no ${values.kind} subjects at all.`);
+        console.error(`\n  Reuse one of those lines verbatim, or if this really is new:`);
+        console.error(`    --new-subject    (and tell whoever owns the contract to declare it)`);
+        return 1;
+      }
       if (!(unit.mayDecide ?? []).includes(values.kind as Decision["kind"])) {
         console.error(`${red("refused")} unit "${unit.id}" may not decide ${values.kind} on its own.`);
         console.error(`  it may decide: ${(unit.mayDecide ?? []).join(", ") || "nothing"}`);

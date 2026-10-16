@@ -89,11 +89,34 @@ export interface Acceptance {
   unit: string;
 }
 
+/**
+ * Something the run knows it will have to settle, named before anyone starts.
+ *
+ * This exists because of how the gate actually fails. Contradiction is found
+ * by comparing decisions that share a subject, and subjects are matched after
+ * folding case, punctuation and accents — but not wording. Two workers who
+ * independently name the same thing "error response body shape" and "api
+ * error response body" produce two unrelated decisions, and the gate never
+ * compares them. Observed, not theorised: it happened on the first run of
+ * this loop against a second project, and only a diligent worker reading the
+ * log caught it.
+ *
+ * Declaring the subject up front turns identity into a lookup instead of a
+ * guess, which keeps the answer deterministic.
+ */
+export interface OpenSubject {
+  kind: Kind;
+  subject: string;
+  note?: string;
+}
+
 export interface Contract {
   id: string;
   goal: string;
   scope: { in: string[]; out: string[] };
   decisions: ContractDecision[];
+  /** Known to need deciding during the run. Workers must use these spellings. */
+  openSubjects?: OpenSubject[];
   units: Unit[];
   acceptance: Acceptance[];
 }

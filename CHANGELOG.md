@@ -37,6 +37,21 @@ subprocesses.
 - `--version` / `-v`.
 - MCP tools for the loop, alongside the existing five.
 
+### Added after the second-project run
+
+- **`openSubjects`** — a contract can name what it knows will need settling
+  before anyone settles it. Each worker's brief then carries those subject
+  lines verbatim, and `decide --contract <id> --unit <id>` refuses a subject
+  the contract never declared, offering the declared spelling instead.
+
+  This closes the sharpest hole in the tool. The gate compares decisions that
+  share a subject, and subjects are matched by wording — so two workers who
+  named the error format "error response body shape" and "api error response
+  body" produced two unrelated decisions with incompatible values, and
+  `check` reported nothing. Declaring the subject makes identity a lookup.
+  Matching by similarity would close it too, and would put a judgement back
+  in the decision path, which this package will not do.
+
 ### Fixed — all four found by running the loop on a second project
 
 A URL shortener built by four workers who never saw each other's code. It
