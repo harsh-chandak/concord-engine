@@ -1,61 +1,78 @@
 # agentguard
 
-**Agents that can't contradict each other.**
+**Parallel agents don't scale past the human in the middle.**
+
+You run five agents to go faster. Four of them are right. The product is broken,
+and the only thing that catches it is you — reading everything, holding the
+whole picture, re-explaining decisions that were already made.
+
+That's not a prompting problem. Your agents have **memory** and they have
+**verification**, and neither one answers the question that actually breaks a
+parallel run:
+
+> Did these two agents just decide incompatible things?
+
+agentguard answers it, and refuses the second decision.
+
+[![Two leads decide the same field differently inside one Claude Code session. The second decision is refused, the PM overrides, and both leads build the same thing.](assets/brag.gif)](https://github.com/harsh-chandak/agentguard/blob/main/assets/brag.mp4)
+
+## The failure it stops
 
 Your backend lead decides the identifier is `user_id`. Your frontend lead,
 working in parallel, decides `userId`.
 
-Both are reasonable. Both sets of workers implement them faithfully. Both pass
-their own tests. Nothing is red. You find out at integration, and you find out
-because *you* noticed — which is why you're in the loop all day re-explaining
-things that were already decided.
-
-agentguard holds the decisions your leads make and **refuses to accept one that
-contradicts another**.
-
-[![Two leads decide the same field differently inside one Claude Code session. The second decision is refused, the PM overrides, and both leads build the same thing.](assets/brag.gif)](https://github.com/harsh-chandak/agentguard/blob/main/assets/brag.mp4)
-
-<sub>Sixteen seconds, no sound. Every line is real output from the MCP server —
-[higher-resolution version](https://github.com/harsh-chandak/agentguard/blob/main/assets/brag.mp4).</sub>
+Both are defensible. Both sets of workers implement them faithfully. Both pass
+their own tests. Nothing is red. You find out at integration — because *you*
+noticed.
 
 ```
-$ agentguard check
+● frontend-lead · record_decision
+    naming: User Identifier in API Payloads = userId
 
-  CONFLICT c-01fc0217  naming: user identifier in API payloads
-      backend-lead (lead)   user_id  "matches the users table column"
-      frontend-lead (lead)  userId   "matches the TypeScript style guide"
-
-      owner: pm   leads disagree; resolution belongs to the layer above
+    ✗ REFUSED — contradicts a decision already in force
+        existing   user_id   backend-lead (lead)
+                   "matches the users table column"
+        resolve by pm
 ```
+
+The agent is stopped at the moment it tries to disagree. Not at integration.
+Not by you.
 
 ## Why this isn't another memory tool
 
-Handoff and memory tools carry context between agents. Orchestrators verify a
-worker did its task. Neither can answer **"did these two agents just decide
-incompatible things?"**
+| Tool | Answers | Doesn't answer |
+| --- | --- | --- |
+| Handoff / memory tools | "what did the last agent know?" | "do these two agree?" |
+| Orchestrator verification | "did this worker do its task?" | "do these two agree?" |
+| Edit-conflict detection | "did two agents touch one file?" | "do these two agree?" |
 
-And the obvious way to answer it — store decisions as prose, ask a model
-whether two of them conflict — is slow, costs a call per check, and is wrong
-often enough that people stop trusting it. At which point the tool is worse
-than nothing, because it has added latency and false alarms to a workflow that
+And the obvious way to answer it — store decisions as prose, ask a model whether
+two of them conflict — is slow, costs a call per check, and is wrong often
+enough that people stop trusting it. A coordination layer nobody trusts is
+worse than none, because it adds latency and false alarms to a workflow that
 had neither.
 
 **agentguard decides agreement by comparison, never by a model.** Decisions are
-typed and narrow, so a contradiction is a comparison. No API call exists
-anywhere in the decision path — there's a test that fails if one appears.
+typed and narrow, so a contradiction is a comparison: same subject, different
+value. No API call exists anywhere in the decision path — there's a test that
+fails if one appears.
 
 ## Install
 
 ```bash
-# Claude Code plugin — skill and MCP server together
-claude plugin marketplace add harsh-chandak/agentguard
+claude plugin marketplace add harsh-chandak/shadowjoin
 claude plugin install agentguard@harsh-chandak
+```
 
-# or the CLI
+Or without Claude Code:
+
+```bash
 npx agentguard --help
 ```
 
 ## Use
+
+Leads and the PM decide. **Workers write code and decide nothing.**
 
 ```bash
 agentguard decide --kind naming \
@@ -63,9 +80,9 @@ agentguard decide --kind naming \
   --value user_id --as backend-lead \
   --rationale "matches the users table column"
 
-agentguard check          # exits 1 if anything contradicts
-agentguard conflicts      # what's open, and whose turn
-agentguard report         # how often a conflict reached you
+agentguard check     # exits 1 if anything contradicts
+agentguard verify    # are the decided routes actually served?
+agentguard report    # how often did a conflict reach you?
 ```
 
 Five kinds, each with its own comparison rule:
@@ -78,9 +95,6 @@ Five kinds, each with its own comparison rule:
 | `enum` | `["pending","paid","shipped"]` | set equality |
 | `schema` | `{"field":"id","type":"uuid","nullable":false}` | structurally |
 
-Anything that doesn't fit a kind isn't a decision. That's deliberate — the log
-is worth something because everything in it is checkable.
-
 ## Who resolves what
 
 ```
@@ -90,13 +104,23 @@ PM can't resolve   ->  you
 ```
 
 Adjudication is read off the hierarchy, not judged. A PM decision overrides a
-lead's on the same subject — that's an override, not a conflict. Two leads who
-disagree go to the PM. Two PMs who disagree reach you, because nothing outranks
-them.
+lead's — that's an override, not a conflict. Two leads who disagree go to the
+PM. Two PMs who disagree reach you, because nothing outranks them.
 
 Two attempts at a layer, then it escalates. What reaches you is a packet — both
-positions, who holds each, why, and what has already been tried — not a
-transcript.
+positions, who holds each, why, and what has already been tried:
+
+```
+CONFLICT c-01fc0217  naming: user identifier in API payloads
+    backend-lead (lead)   user_id  "matches the users table column"
+    frontend-lead (lead)  userId   "matches the TypeScript style guide"
+
+    tried: proposed user_id; frontend-lead rejected, 3 call sites already public
+    tried: proposed an alias field; rejected as duplication
+    owner: you
+```
+
+Not "something went wrong, go read the logs."
 
 ## The number that matters
 
@@ -107,24 +131,28 @@ $ agentguard report
     settled without you     44
     reached the PM          11
     reached you              3   6.4%
-
-  Success is how rarely "reached you" is not zero.
 ```
 
 Every other orchestrator reports agents launched, tokens spent, tasks
-completed. None of them reports whether the system handled itself.
+completed. None of them reports whether the system handled itself — which is
+the only number that says whether running ten agents actually cost you less
+than running one.
 
 ## Honest limits
 
+- **Only what's recorded is checked.** A lead who decides something in prose and
+  never records it is invisible to this.
+- **Subjects are matched loosely** — case, punctuation and accents are
+  normalised, so "User Identifier" and "user identifier" collide. Two leads who
+  describe the same thing in genuinely different words still won't. That's a
+  real miss.
+- **`verify` reads literal paths only.** A router mounted under a prefix, or a
+  path built at runtime, is invisible to static extraction. It under-reports
+  rather than accusing falsely, and prints how many files it read so the number
+  isn't mistaken for completeness.
 - **It doesn't verify the work was done.** That's your orchestrator's job.
 - **It doesn't judge which decision is better.** It reports that two can't both
   hold, and who gets to rule.
-- **Subjects are matched loosely** — case, punctuation and accents are
-  normalised, so "User Identifier" and "user identifier" collide. Two leads who
-  describe the same thing in genuinely different words still won't, and that's
-  a real miss.
-- **Only what's recorded is checked.** A lead who decides something in prose and
-  never records it is invisible to this.
 - **Five kinds, deliberately.** `dependency` is deferred until semver range
   intersection is implemented properly; a comparator that calls `^1.0.0` and
   `^1.2.0` incompatible would be worse than not having it.
