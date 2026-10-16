@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * agentguard MCP server.
+ * orchestraguard MCP server.
  *
  * The important behaviour is that `record_decision` REFUSES a decision that
  * contradicts one already in force, and returns the conflict instead. The
@@ -17,7 +17,7 @@ import { conflictId, reconcile, readConflicts, writeConflict } from "./conflicts
 import type { Decision, Layer } from "./types.js";
 
 const VERSION: string = createRequire(import.meta.url)("../package.json").version;
-const DIR = process.env.AGENTGUARD_DIR ?? DEFAULT_DIR;
+const DIR = process.env.ORCHESTRAGUARD_DIR ?? DEFAULT_DIR;
 
 async function loadSdk() {
   try {
@@ -29,11 +29,11 @@ async function loadSdk() {
     return { Server, StdioServerTransport, ...types };
   } catch {
     process.stderr.write(
-      "agentguard-mcp needs @modelcontextprotocol/sdk, an optional peer dependency.\n" +
+      "orchestraguard-mcp needs @modelcontextprotocol/sdk, an optional peer dependency.\n" +
         "Run it with the SDK provided:\n" +
-        "  npx -y -p agentguard -p @modelcontextprotocol/sdk agentguard-mcp\n" +
-        "or install it alongside agentguard:\n" +
-        "  npm i agentguard @modelcontextprotocol/sdk\n",
+        "  npx -y -p orchestraguard -p @modelcontextprotocol/sdk orchestraguard-mcp\n" +
+        "or install it alongside orchestraguard:\n" +
+        "  npm i orchestraguard @modelcontextprotocol/sdk\n",
     );
     process.exit(1);
   }
@@ -97,7 +97,7 @@ const TOOLS = [
 ];
 
 const { Server, StdioServerTransport, CallToolRequestSchema, ListToolsRequestSchema } = await loadSdk();
-const server = new Server({ name: "agentguard", version: VERSION }, { capabilities: { tools: {} } });
+const server = new Server({ name: "orchestraguard", version: VERSION }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 

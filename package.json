@@ -1,7 +1,7 @@
 {
-  "name": "@harsh-chandak/agentguard",
+  "name": "orchestraguard",
   "version": "0.1.0",
-  "description": "Agents that can't contradict each other. A decision log for hierarchical coding agents, with deterministic contradiction detection and an escalation ladder \u2014 no model call in the decision path.",
+  "description": "Agent orchestration never drifts. A decision log for hierarchical coding agents that refuses a contradicting decision \u2014 deterministic, no model call.",
   "keywords": [
     "ai-agents",
     "agent-orchestration",
@@ -21,8 +21,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "agentguard": "dist/cli.js",
-    "agentguard-mcp": "dist/mcp.js"
+    "orchestraguard": "dist/cli.js",
+    "orchestraguard-mcp": "dist/mcp.js"
   },
   "files": [
     "dist",
@@ -43,11 +43,11 @@
   "author": "Harsh N. Chandak",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/harsh-chandak/agentguard.git"
+    "url": "git+https://github.com/harsh-chandak/orchestraguard.git"
   },
-  "homepage": "https://github.com/harsh-chandak/agentguard#readme",
+  "homepage": "https://github.com/harsh-chandak/orchestraguard#readme",
   "bugs": {
-    "url": "https://github.com/harsh-chandak/agentguard/issues"
+    "url": "https://github.com/harsh-chandak/orchestraguard/issues"
   },
   "exports": {
     ".": "./dist/index.js",
@@ -61,8 +61,5 @@
       "optional": true
     }
   },
-  "mcpName": "io.github.harsh-chandak/agentguard",
-  "publishConfig": {
-    "access": "public"
-  }
+  "mcpName": "io.github.harsh-chandak/orchestraguard"
 }

@@ -1,6 +1,8 @@
-# agentguard
+# orchestraguard
 
-**Parallel agents don't scale past the human in the middle.**
+**Agent orchestration never drifts.**
+
+Parallel agents don't scale past the human in the middle.
 
 You run five agents to go faster. Four of them are right. The product is broken,
 and the only thing that catches it is you — reading everything, holding the
@@ -12,9 +14,9 @@ parallel run:
 
 > Did these two agents just decide incompatible things?
 
-agentguard answers it, and refuses the second decision.
+orchestraguard answers it, and refuses the second decision.
 
-[![Two leads decide the same field differently inside one Claude Code session. The second decision is refused, the PM overrides, and both leads build the same thing.](assets/brag.gif)](https://github.com/harsh-chandak/agentguard/blob/main/assets/brag.mp4)
+[![Two leads decide the same field differently inside one Claude Code session. The second decision is refused, the PM overrides, and both leads build the same thing.](assets/brag.gif)](https://github.com/harsh-chandak/orchestraguard/blob/main/assets/brag.mp4)
 
 ## The failure it stops
 
@@ -52,7 +54,7 @@ enough that people stop trusting it. A coordination layer nobody trusts is
 worse than none, because it adds latency and false alarms to a workflow that
 had neither.
 
-**agentguard decides agreement by comparison, never by a model.** Decisions are
+**orchestraguard decides agreement by comparison, never by a model.** Decisions are
 typed and narrow, so a contradiction is a comparison: same subject, different
 value. No API call exists anywhere in the decision path — there's a test that
 fails if one appears.
@@ -61,13 +63,13 @@ fails if one appears.
 
 ```bash
 claude plugin marketplace add harsh-chandak/shadowjoin
-claude plugin install agentguard@harsh-chandak
+claude plugin install orchestraguard@harsh-chandak
 ```
 
 Or without Claude Code:
 
 ```bash
-npx @harsh-chandak/agentguard --help
+npx orchestraguard --help
 ```
 
 ## Use
@@ -75,15 +77,15 @@ npx @harsh-chandak/agentguard --help
 Leads and the PM decide. **Workers write code and decide nothing.**
 
 ```bash
-# `agentguard` is the command; the package is scoped
-agentguard decide --kind naming \
+# `orchestraguard` is the command; the package is scoped
+orchestraguard decide --kind naming \
   --subject "user identifier in API payloads" \
   --value user_id --as backend-lead \
   --rationale "matches the users table column"
 
-agentguard check     # exits 1 if anything contradicts
-agentguard verify    # are the decided routes actually served?
-agentguard report    # how often did a conflict reach you?
+orchestraguard check     # exits 1 if anything contradicts
+orchestraguard verify    # are the decided routes actually served?
+orchestraguard report    # how often did a conflict reach you?
 ```
 
 Five kinds, each with its own comparison rule:
@@ -126,7 +128,7 @@ Not "something went wrong, go read the logs."
 ## The number that matters
 
 ```
-$ agentguard report
+$ orchestraguard report
 
   47 conflicts recorded
     settled without you     44

@@ -13,7 +13,7 @@ export const blue = (s: string) => c("38;5;75", s);
 
 export function banner(version: string): string {
   if (!isTty()) return "";
-  return `\n  ${blue("▌")}${bold(" agentguard ")}${dim("v" + version)}\n  ${blue("▌")}${dim(" agents that can't contradict each other")}\n\n`;
+  return `\n  ${blue("▌")}${bold(" orchestraguard ")}${dim("v" + version)}\n  ${blue("▌")}${dim(" agents that can't contradict each other")}\n\n`;
 }
 
 /**

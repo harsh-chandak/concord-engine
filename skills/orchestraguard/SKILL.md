@@ -1,16 +1,16 @@
 ---
-name: agentguard
-description: Keep a team of coding agents from contradicting each other. Use when running a PM/lead/worker hierarchy or any multi-agent setup, before recording a convention, naming, API contract, enum or schema choice, before writing code that depends on one, and whenever two agents disagree. Requires the agentguard MCP server.
+name: orchestraguard
+description: Keep a team of coding agents from contradicting each other. Use when running a PM/lead/worker hierarchy or any multi-agent setup, before recording a convention, naming, API contract, enum or schema choice, before writing code that depends on one, and whenever two agents disagree. Requires the orchestraguard MCP server.
 ---
 
-# agentguard
+# orchestraguard
 
 In a hierarchy of agents, each layer can be locally correct while the product
 is broken. The backend lead decides the identifier is `user_id`; the frontend
 lead decides `userId`. Both are reasonable, both sets of workers implement them
 faithfully, both pass their own tests, and the human finds out at integration.
 
-agentguard holds those decisions and refuses to accept a contradicting one.
+orchestraguard holds those decisions and refuses to accept a contradicting one.
 
 ## Who does what
 

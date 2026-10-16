@@ -12,17 +12,17 @@ import type { Decision, Layer } from "./types.js";
 const VERSION: string = createRequire(import.meta.url)("../package.json").version;
 
 const USAGE = `
-agentguard — agents that can't contradict each other.
+orchestraguard — agents that can't contradict each other.
 
-  agentguard decide --kind <kind> --subject "<what>" --value <v> --as <author>
+  orchestraguard decide --kind <kind> --subject "<what>" --value <v> --as <author>
       [--layer lead|pm] [--rationale "<why>"] [--supersedes <id>]
 
-  agentguard check          detect contradictions; exit 1 if any are open
-  agentguard conflicts      what is open, and whose turn it is
-  agentguard attempt <id>   record a failed resolution attempt; escalates on the 2nd
-  agentguard verify [path]  check api-contract decisions against the code
-  agentguard report         how often conflicts reached a human
-  agentguard kinds          the decision kinds and their value shapes
+  orchestraguard check          detect contradictions; exit 1 if any are open
+  orchestraguard conflicts      what is open, and whose turn it is
+  orchestraguard attempt <id>   record a failed resolution attempt; escalates on the 2nd
+  orchestraguard verify [path]  check api-contract decisions against the code
+  orchestraguard report         how often conflicts reached a human
+  orchestraguard kinds          the decision kinds and their value shapes
 
   --dir <path>   where the log lives (default ${DEFAULT_DIR})
   --json         machine-readable output
@@ -142,7 +142,7 @@ async function main(): Promise<number> {
 
   if (cmd === "attempt") {
     const id = positionals[1];
-    if (!id) { console.error("usage: agentguard attempt <conflict-id> [--note \"what was tried\"]"); return 2; }
+    if (!id) { console.error("usage: orchestraguard attempt <conflict-id> [--note \"what was tried\"]"); return 2; }
     const stored = readConflicts(dir).find((c) => c.id === id);
     if (!stored) { console.error(`no conflict ${id}`); return 2; }
     const noted = values.note ? { ...stored, notes: [...stored.notes, values.note] } : stored;
@@ -169,5 +169,5 @@ async function main(): Promise<number> {
 
 main().then(
   (code) => process.exit(code),
-  (err: unknown) => { console.error(`\nagentguard: ${err instanceof Error ? err.message : String(err)}\n`); process.exit(2); },
+  (err: unknown) => { console.error(`\norchestraguard: ${err instanceof Error ? err.message : String(err)}\n`); process.exit(2); },
 );

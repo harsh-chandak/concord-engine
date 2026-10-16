@@ -10,7 +10,7 @@ import { kindSpec, normalizeSubject } from "./compare.js";
  * parse-rewrite cycle, which is what an append-only log wants, and it needs no
  * parser, which keeps the package at zero runtime dependencies.
  */
-export const DEFAULT_DIR = ".agentguard";
+export const DEFAULT_DIR = ".orchestraguard";
 export const decisionsPath = (dir = DEFAULT_DIR) => join(dir, "decisions.jsonl");
 
 export function readDecisions(dir = DEFAULT_DIR): Decision[] {

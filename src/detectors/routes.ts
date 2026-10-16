@@ -13,7 +13,7 @@ export interface Violation {
   nearest?: ServedRoute;
 }
 
-const SKIP = new Set(["node_modules", ".git", "dist", "build", ".next", "__pycache__", ".venv", "venv", ".agentguard"]);
+const SKIP = new Set(["node_modules", ".git", "dist", "build", ".next", "__pycache__", ".venv", "venv", ".orchestraguard"]);
 const EXTS = new Set([".ts", ".js", ".mjs", ".tsx", ".jsx", ".py"]);
 
 export function sourceFiles(root: string, out: string[] = []): string[] {
@@ -36,7 +36,7 @@ export function sourceFiles(root: string, out: string[] = []): string[] {
  * recognised handler calls and nothing else. A router mounted under a prefix,
  * or a path built at runtime, is invisible. That produces misses, never false
  * accusations — a decision is only reported as violated when no served route
- * matches it at all, and `agentguard verify` says how many files it read so the
+ * matches it at all, and `orchestraguard verify` says how many files it read so the
  * number is never mistaken for completeness.
  */
 export function extractRoutes(files: string[]): ServedRoute[] {
