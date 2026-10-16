@@ -60,5 +60,6 @@
     "@modelcontextprotocol/sdk": {
       "optional": true
     }
-  }
+  },
+  "mcpName": "io.github.harsh-chandak/agentguard"
 }

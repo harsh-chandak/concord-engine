@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.harsh-chandak/agentguard",
+  "description": "Stop a team of coding agents contradicting each other. Deterministic, no model call.",
+  "repository": { "url": "https://github.com/harsh-chandak/agentguard", "source": "github" },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "agentguard",
+      "version": "0.1.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "AGENTGUARD_DIR",
+          "description": "Where the decision log lives. Defaults to .agentguard in the working directory. Commit it — the log is the shared contract between your agents.",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
