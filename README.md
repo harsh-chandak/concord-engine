@@ -66,6 +66,9 @@ claude plugin marketplace add harsh-chandak/shadowjoin
 claude plugin install orchestraguard@harsh-chandak
 ```
 
+<sub>The `harsh-chandak` marketplace is hosted in the shadowjoin repo and carries
+both tools — that first line is not a typo.</sub>
+
 Or without Claude Code:
 
 ```bash
@@ -77,7 +80,6 @@ npx orchestraguard --help
 Leads and the PM decide. **Workers write code and decide nothing.**
 
 ```bash
-# `orchestraguard` is the command; the package is scoped
 orchestraguard decide --kind naming \
   --subject "user identifier in API payloads" \
   --value user_id --as backend-lead \
