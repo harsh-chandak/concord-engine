@@ -59,5 +59,26 @@ jobs:
           fi
           echo "all three agree on $PKG"
 
+      # The registry refuses to register a version npm does not serve yet, and
+      # npm's propagation outlasts a registry token's lifetime — which is how
+      # the 0.2.0 release failed by hand: publish 400'd on a missing version,
+      # and by the time npm had caught up the JWT had expired. Wait for npm
+      # FIRST, then authenticate, so the token is minted against a version the
+      # registry can already see.
+      - name: wait for npm to serve this version
+        run: |
+          set -euo pipefail
+          PKG="$(jq -r .name package.json)"
+          VER="$(jq -r .version package.json)"
+          for i in $(seq 1 30); do
+            if curl -fsSL "https://registry.npmjs.org/${PKG}" | jq -e --arg v "$VER" '.versions[$v]' >/dev/null 2>&1; then
+              echo "npm serves ${PKG}@${VER} after $((i * 10))s"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "npm did not serve ${PKG}@${VER} within 300s"
+          exit 1
+
       - run: ./mcp-publisher login github-oidc
       - run: ./mcp-publisher publish
