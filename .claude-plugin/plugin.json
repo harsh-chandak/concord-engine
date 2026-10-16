@@ -1,7 +1,7 @@
 {
   "name": "orchestraguard",
   "displayName": "orchestraguard",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Agents that can't contradict each other. A decision log for hierarchical coding agents, with deterministic contradiction detection and an escalation ladder.",
   "author": {
     "name": "Harsh N. Chandak",

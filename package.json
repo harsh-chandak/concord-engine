@@ -1,6 +1,6 @@
 {
   "name": "orchestraguard",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Agent orchestration never drifts. A decision log for hierarchical coding agents that refuses a contradicting decision \u2014 deterministic, no model call.",
   "keywords": [
     "ai-agents",

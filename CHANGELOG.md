@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.2 — the README people actually read
+
+0.2.1's tarball carried the pre-rewrite README: the one that framed the tool
+as a check on variable names and route paths, quoted a cost figure that had
+since moved, and illustrated the gate with a mocked terminal block rather
+than real output. npm serves the README from the tarball, so the package page
+was showing all of that. This release ships the rewritten README and skill,
+and the demo recorded from the real CLI.
+
+`scripts/prepublish-guard.mjs` now skips its branch and remote checks on a CI
+runner, where the checkout is a detached HEAD the workflow chose. The
+clean-tree check still applies. Without this the guard would have failed
+every trusted-publishing release — the publish path it exists to protect.
+
 ## 0.2.1 — what 0.2.0 should have contained
 
 **0.2.0 on npm is a build of an older tree.** Its tarball has none of the five
