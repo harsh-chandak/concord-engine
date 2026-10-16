@@ -106,14 +106,52 @@ test("escalation takes two attempts before moving up a layer", () => {
   assert.equal(c.state, "escalated");
 });
 
-test("no model call exists anywhere in the decision path", async () => {
+// The claim this project rests on is that agreement is decided by comparison
+// and never by a model. A claim nothing enforces is a slogan, so these two
+// tests enforce it — and they distinguish two paths that v0.2 made different.
+//
+// The DECISION path decides what is true: whether values conflict, what is in
+// force, whether a contract is well-formed. It may not leave the process at
+// all, by any means.
+//
+// The VERIFICATION path runs the acceptance commands the contract named. It
+// exists to spawn subprocesses. It still may not call a model.
+const DECISION_PATH = ["compare.ts", "detect.ts", "log.ts", "conflicts.ts", "contract.ts", "types.ts"];
+const NETWORK = /\b(fetch|anthropic|openai|axios|node:https?|XMLHttpRequest|https?:\/\/api)\b/i;
+// The lookbehind matters: `regex.exec(...)` is a RegExp method, not
+// child_process, and matching it made this test fail on log.ts for
+// parsing a decision id.
+const LEAVES_PROCESS = /child_process|(?<![.\w])(spawn|spawnSync|exec|execSync|execFile|execFileSync|fork)\s*\(/;
+
+test("nothing in the decision path can leave the process", async () => {
+  const { readFileSync } = await import("node:fs");
+  for (const f of DECISION_PATH) {
+    const src = readFileSync(`src/${f}`, "utf8");
+    assert.ok(!NETWORK.test(src), `src/${f} reaches the network — the decision path must stay deterministic`);
+    assert.ok(!LEAVES_PROCESS.test(src), `src/${f} spawns a process — the decision path must stay deterministic`);
+  }
+});
+
+test("no file anywhere calls a model, including the verification path", async () => {
   const { readFileSync, readdirSync } = await import("node:fs");
   const files = readdirSync("src", { recursive: true }).filter((f) => String(f).endsWith(".ts"));
+  assert.ok(files.length >= DECISION_PATH.length, "src shrank unexpectedly — this test may be scanning nothing");
   for (const f of files) {
     const src = readFileSync(`src/${f}`, "utf8");
-    assert.ok(!/\b(fetch|anthropic|openai|https?:\/\/api)\b/i.test(src),
-      `${f} reaches outside the process — the decision path must stay deterministic`);
+    assert.ok(!NETWORK.test(src), `src/${f} reaches outside the process — no model may decide anything here`);
   }
+});
+
+test("REGRESSION: the decision-path list still covers every module that decides", async () => {
+  // A new module that decides something, added without being listed above,
+  // would be exempt from the rule by omission — which is how a guarantee
+  // quietly stops being one.
+  const { readdirSync } = await import("node:fs");
+  const present = readdirSync("src").filter((f) => f.endsWith(".ts"));
+  const undecided = ["cli.ts", "mcp.ts", "format.ts", "index.ts", "run.ts", "ui.ts"];
+  const unaccounted = present.filter((f) => !DECISION_PATH.includes(f) && !undecided.includes(f));
+  assert.deepEqual(unaccounted, [],
+    `new module(s) in src/: add to DECISION_PATH if they decide anything, or to the exempt list with a reason`);
 });
 
 test("path normalization collapses every param style", () => {

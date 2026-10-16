@@ -1,0 +1,133 @@
+{
+  "id": "orchestraguard-v2",
+  "goal": "Ship the full loop — contract, bind, brief, fan out, gate, verify, document, account — with the package never calling a model.",
+  "scope": {
+    "in": [
+      "MCP tools for every loop command",
+      "the skill that drives the loop inside Claude Code",
+      "unit tests for contract validation, briefing, waves, acceptance and cost",
+      "README rewritten around the loop",
+      "an end-to-end shell matrix for the loop"
+    ],
+    "out": [
+      "spawning worker processes — the host spawns, the package briefs",
+      "authoring contracts — the agent authors, the package validates",
+      "counting real tokens — no tokenizer ships, estimates are labelled",
+      "retrying failed workers"
+    ]
+  },
+  "decisions": [
+    {
+      "kind": "convention",
+      "subject": "model calls inside the package",
+      "value": "no file in the package may call a model or open a network connection; enforced by a test",
+      "rationale": "the one defensible sentence is that agreement is decided by comparison, never by a model — if authoring moves inside the package that stops being true"
+    },
+    {
+      "kind": "naming",
+      "subject": "cli flag for selecting a contract",
+      "value": "--contract",
+      "rationale": "every loop command takes it, so it has to be the same word everywhere"
+    },
+    {
+      "kind": "naming",
+      "subject": "cli command that runs acceptance checks",
+      "value": "accept",
+      "rationale": "verify already means route verification in v0.1 and renaming it would break installed users"
+    },
+    {
+      "kind": "convention",
+      "subject": "how token figures are presented",
+      "value": "every token figure is labelled an estimate and states its chars-per-token assumption",
+      "rationale": "the package measures bytes; calling bytes tokens would be the kind of unsourced number this project exists to avoid"
+    },
+    {
+      "kind": "naming",
+      "subject": "mcp tool name prefix for loop tools",
+      "value": "no prefix; tool names are write_contract, bind_contract, brief_unit, fleet_plan, run_acceptance, generate_docs, cost_report",
+      "rationale": "the existing five tools carry no prefix, and mixing conventions inside one server is the drift this tool exists to catch"
+    }
+  ],
+  "units": [
+    {
+      "id": "mcp",
+      "goal": "Expose every loop command as an MCP tool, matching the naming decision, refusing bad contracts with the validator's own messages.",
+      "files": [
+        "src/mcp.ts",
+        "test/mcp-smoke.mjs"
+      ],
+      "mayDecide": [],
+      "dependsOn": [],
+      "notes": "The SDK is an optional peer loaded by dynamic import. Keep that pattern."
+    },
+    {
+      "id": "skill",
+      "goal": "Rewrite SKILL.md so a Claude Code agent can run the whole loop: author a contract to the schema, bind it, brief each unit, fan out one subagent per unit, gate their decisions, accept, document.",
+      "files": [
+        "SKILL.md"
+      ],
+      "mayDecide": [],
+      "dependsOn": []
+    },
+    {
+      "id": "tests",
+      "goal": "Unit tests for contract validation rejections, brief content, wave ordering, acceptance running and cost reporting.",
+      "files": [
+        "test/contract.test.js",
+        "test/run.test.js"
+      ],
+      "mayDecide": [],
+      "dependsOn": []
+    },
+    {
+      "id": "readme",
+      "goal": "Rewrite README.md around the loop without losing the v0.1 pitch that the gate is the product.",
+      "files": [
+        "README.md"
+      ],
+      "mayDecide": [],
+      "dependsOn": []
+    },
+    {
+      "id": "e2e",
+      "goal": "Extend the shell matrix to cover the loop end to end, including a contract that is correctly rejected.",
+      "files": [
+        "test/e2e-loop.sh"
+      ],
+      "mayDecide": [],
+      "dependsOn": []
+    }
+  ],
+  "acceptance": [
+    {
+      "id": "a-mcp",
+      "statement": "the MCP server lists every loop tool and starts cleanly",
+      "check": "node test/mcp-smoke.mjs",
+      "unit": "mcp"
+    },
+    {
+      "id": "a-skill",
+      "statement": "SKILL.md documents the loop in order",
+      "check": "test -f SKILL.md && grep -q 'spec --schema' SKILL.md && grep -q 'bind --contract' SKILL.md && grep -q 'brief --contract' SKILL.md && grep -q 'accept --contract' SKILL.md && ! grep -q 'verify --contract' SKILL.md",
+      "unit": "skill"
+    },
+    {
+      "id": "a-tests",
+      "statement": "every unit test passes",
+      "check": "test -f test/contract.test.js && test -f test/run.test.js && node --test test/*.test.js",
+      "unit": "tests"
+    },
+    {
+      "id": "a-readme",
+      "statement": "the README covers the loop and keeps the gate pitch",
+      "check": "test -f README.md && grep -q 'spec --schema' README.md && grep -q 'refus' README.md && grep -q -i 'estimate' README.md",
+      "unit": "readme"
+    },
+    {
+      "id": "a-e2e",
+      "statement": "the end-to-end loop matrix passes",
+      "check": "test -x test/e2e-loop.sh && bash test/e2e-loop.sh",
+      "unit": "e2e"
+    }
+  ]
+}

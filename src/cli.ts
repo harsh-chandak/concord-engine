@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { createRequire } from "node:module";
+import { readFileSync, writeFileSync } from "node:fs";
 import { detect, escalate } from "./detect.js";
-import { KIND_IDS, kindSpec } from "./compare.js";
-import { appendDecision, readDecisions, nextId, DEFAULT_DIR, resolveDir } from "./log.js";
+import { KIND_IDS, kindSpec, normalizeSubject } from "./compare.js";
+import { appendDecision, readDecisions, nextId, activeDecisions, DEFAULT_DIR, resolveDir } from "./log.js";
+import { SCHEMA, validateContract, saveContract, loadContract, briefFor, waves } from "./contract.js";
+import { runAcceptance, generateDocs, costReport } from "./run.js";
 import { conflictId, reconcile, readConflicts, writeConflict } from "./conflicts.js";
 import { banner, packet, overrideLine, report, dim, green, red } from "./format.js";
 import { extractRoutes, sourceFiles, verifyRoutes } from "./detectors/routes.js";
@@ -24,6 +27,18 @@ orchestraguard — agents that can't contradict each other.
   orchestraguard report         how often conflicts reached a human
   orchestraguard kinds          the decision kinds and their value shapes
 
+the loop — describe a task, run a fleet, finish with it proved and written up:
+
+  orchestraguard spec --schema          the contract shape your agent fills in
+  orchestraguard spec --from <f.json>   validate and store a contract
+  orchestraguard bind --contract <id>   make its decisions binding, at PM layer
+  orchestraguard fleet --contract <id>  the waves, and who can start now
+  orchestraguard brief --contract <id> <unit>
+                                        exactly what one worker is told
+  orchestraguard accept --contract <id> run every acceptance check
+  orchestraguard docs --contract <id>   the design doc, from the log
+  orchestraguard cost --contract <id>   what the fan-out saved (estimated)
+
   --dir <path>   where the log lives (default ${DEFAULT_DIR}, or $ORCHESTRAGUARD_DIR)
   --json         machine-readable output
   --version      print the version and exit
@@ -40,6 +55,13 @@ function parseValue(raw: string): unknown {
   return raw;
 }
 
+/** A contract id from --contract or the first positional after the command. */
+function requireContract(values: { contract?: string }, positionals: string[]): string {
+  const id = values.contract ?? positionals[1];
+  if (!id) throw new Error("this command needs --contract <id> (see `orchestraguard spec --from ...`)");
+  return id;
+}
+
 async function main(): Promise<number> {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -49,6 +71,8 @@ async function main(): Promise<number> {
       supersedes: { type: "string" }, note: { type: "string" },
       dir: { type: "string" }, json: { type: "boolean" }, help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },
+      schema: { type: "boolean" }, from: { type: "string" }, contract: { type: "string" },
+      unit: { type: "string" }, out: { type: "string" },
     },
   });
   const cmd = positionals[0] ?? "help";
@@ -163,6 +187,127 @@ async function main(): Promise<number> {
     const conflicts = readConflicts(dir);
     if (values.json) { console.log(JSON.stringify(conflicts, null, 2)); return 0; }
     console.log(report(conflicts));
+    return 0;
+  }
+
+
+  /* ---------------- v0.2: the loop ---------------- */
+
+  if (cmd === "spec") {
+    if (values.schema) { console.log(JSON.stringify(SCHEMA, null, 2)); return 0; }
+    const from = values.from ?? positionals[1];
+    if (!from) { console.error("spec needs --schema, or --from <file.json>"); return 2; }
+    const raw = from === "-" ? readFileSync(0, "utf8") : readFileSync(from, "utf8");
+    const contract = validateContract(JSON.parse(raw));
+    const path = saveContract(contract, dir);
+    if (values.json) { console.log(JSON.stringify(contract, null, 2)); return 0; }
+    show(banner(VERSION));
+    console.log(`${green("contract accepted")}  ${contract.id}  ${dim(`-> ${path}`)}`);
+    console.log(`  ${contract.units.length} units, ${contract.decisions.length} binding decisions, ${contract.acceptance.length} acceptance criteria`);
+    console.log(`  waves: ${waves(contract).map((w) => w.join("+")).join(" -> ")}`);
+    return 0;
+  }
+
+  if (cmd === "bind") {
+    const contract = loadContract(requireContract(values, positionals), dir);
+    const active = activeDecisions(readDecisions(dir));
+    const author = values.as ?? `contract:${contract.id}`;
+    const recorded: string[] = [];
+    const refused: string[] = [];
+
+    for (const d of contract.decisions) {
+      const key = `${d.kind}::${normalizeSubject(d.subject)}`;
+      const prior = active.find((x) => `${x.kind}::${normalizeSubject(x.subject)}` === key);
+      const spec = kindSpec(d.kind);
+      if (prior && spec.conflicts(spec.parse(prior.value), spec.parse(d.value))) {
+        // A new contract silently overriding a live decision is the exact
+        // failure this tool exists to prevent, so binding refuses rather
+        // than supersedes. Superseding stays a deliberate, authored act.
+        refused.push(`${d.subject}: contract says ${spec.render(spec.parse(d.value))}, ${prior.author} already decided ${spec.render(spec.parse(prior.value))} (${prior.id})`);
+        continue;
+      }
+      if (prior) continue;
+      appendDecision({
+        id: nextId(readDecisions(dir)), kind: d.kind, subject: d.subject, value: d.value,
+        layer: "pm", author, rationale: d.rationale, supersedes: null, at: new Date().toISOString(),
+      }, dir);
+      recorded.push(d.subject);
+    }
+
+    if (values.json) { console.log(JSON.stringify({ bound: recorded, refused }, null, 2)); return refused.length ? 1 : 0; }
+    show(banner(VERSION));
+    for (const r of recorded) console.log(`  ${green("bound")}    ${r}`);
+    for (const r of refused) console.log(`  ${red("refused")}  ${r}`);
+    console.log(`\n  ${recorded.length} bound, ${refused.length} refused`);
+    return refused.length ? 1 : 0;
+  }
+
+  if (cmd === "brief") {
+    const contract = loadContract(requireContract(values, positionals), dir);
+    // Two call shapes: `brief --contract X unit` leaves the unit at
+    // positionals[1]; `brief X unit` puts the contract there and the unit at
+    // positionals[2]. Taking the last positional treated the command name
+    // itself as a unit when neither was given.
+    const unit = values.unit ?? (values.contract ? positionals[1] : positionals[2]);
+    if (!unit) { console.error(`brief needs a unit: ${contract.units.map((u) => u.id).join(", ")}`); return 2; }
+    const brief = briefFor(contract, unit, activeDecisions(readDecisions(dir)));
+    console.log(values.json ? JSON.stringify(brief, null, 2) : brief.instructions);
+    return 0;
+  }
+
+  if (cmd === "fleet") {
+    const contract = loadContract(requireContract(values, positionals), dir);
+    const active = activeDecisions(readDecisions(dir));
+    const plan = waves(contract).map((w, i) => ({
+      wave: i + 1,
+      units: w.map((u) => briefFor(contract, u, active)),
+    }));
+    if (values.json) { console.log(JSON.stringify({ contract: contract.id, waves: plan }, null, 2)); return 0; }
+    show(banner(VERSION));
+    for (const w of plan) {
+      console.log(`${dim(`wave ${w.wave}`)}  ${w.units.length} worker${w.units.length === 1 ? "" : "s"} in parallel`);
+      for (const b of w.units) console.log(`    ${b.unit.padEnd(16)} ${dim(b.goal)}`);
+    }
+    console.log(`\n  ${dim("one brief per unit:")} orchestraguard brief --contract ${contract.id} <unit>`);
+    return 0;
+  }
+
+  if (cmd === "accept") {
+    const contract = loadContract(requireContract(values, positionals), dir);
+    const results = runAcceptance(contract);
+    const failed = results.filter((r) => !r.passed);
+    if (values.json) { console.log(JSON.stringify(results, null, 2)); return failed.length ? 1 : 0; }
+    show(banner(VERSION));
+    for (const r of results) {
+      console.log(`  ${r.passed ? green("pass") : red("FAIL")}  ${r.id.padEnd(10)} ${r.statement} ${dim(`(${r.ms}ms)`)}`);
+      if (!r.passed) console.log(`${dim(r.output.split("\n").map((l) => `          ${l}`).join("\n"))}`);
+    }
+    console.log(`\n  ${results.length - failed.length}/${results.length} criteria satisfied`);
+    return failed.length ? 1 : 0;
+  }
+
+  if (cmd === "docs") {
+    const contract = loadContract(requireContract(values, positionals), dir);
+    const md = generateDocs(contract, readDecisions(dir));
+    if (values.out) { writeFileSync(values.out, md, "utf8"); console.log(`${green("wrote")} ${values.out}`); return 0; }
+    console.log(md);
+    return 0;
+  }
+
+  if (cmd === "cost") {
+    const contract = loadContract(requireContract(values, positionals), dir);
+    const rep = costReport(contract, activeDecisions(readDecisions(dir)));
+    if (values.json) { console.log(JSON.stringify(rep, null, 2)); return 0; }
+    show(banner(VERSION));
+    for (const l of rep.lines) {
+      console.log(`  ${l.unit.padEnd(16)} ${String(l.briefBytes).padStart(6)} B brief   ${dim(`vs ${l.baselineBytes} B whole contract`)}`);
+    }
+    const pct = Math.round((1 - rep.ratio) * 100);
+    console.log(pct >= 0
+      ? `\n  ${rep.briefTotal} B sent instead of ${rep.baselineTotal} B — ${pct}% less`
+      : `\n  ${rep.briefTotal} B sent against a ${rep.baselineTotal} B baseline — ${-pct}% MORE.\n  ${dim("A brief carries headings and standing instructions; on a contract this small they outweigh it.")}`);
+    console.log(`  ${dim(`~${rep.estimatedBriefTokens} vs ~${rep.estimatedBaselineTokens} tokens, ESTIMATED at ${rep.charsPerToken} chars/token.`)}`);
+    console.log(`  ${dim("No tokenizer ships with this package; these are divisions, not counts.")}`);
     return 0;
   }
 

@@ -7,14 +7,23 @@
  * agent is stopped at the moment it tries to disagree, rather than told
  * afterwards by a human who had to notice.
  *
+ * The v0.2 tools put the whole loop behind the same gate: a contract is
+ * written, bound, briefed out one unit at a time, and proved by the commands
+ * it named. A host agent that never shells out still cannot skip the refusal.
+ *
  * Nothing here calls a model. Agreement is a comparison.
  */
+import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { detect, escalate } from "./detect.js";
 import { KIND_IDS, kindSpec, normalizeSubject } from "./compare.js";
 import { appendDecision, readDecisions, nextId, activeDecisions, resolveDir } from "./log.js";
 import { conflictId, reconcile, readConflicts, writeConflict } from "./conflicts.js";
-import type { Decision, Layer } from "./types.js";
+import {
+  ContractError, SCHEMA, briefFor, loadContract, saveContract, validateContract, waves,
+} from "./contract.js";
+import { costReport, generateDocs, runAcceptance } from "./run.js";
+import type { Contract, Decision, Layer } from "./types.js";
 
 const VERSION: string = createRequire(import.meta.url)("../package.json").version;
 const DIR = resolveDir();
@@ -94,12 +103,110 @@ const TOOLS = [
       "How often conflicts reached a human. The number this tool exists to drive to zero.",
     inputSchema: { type: "object", properties: {} },
   },
+
+  /* ---------------- v0.2: the loop ---------------- */
+
+  {
+    name: "write_contract",
+    description:
+      "Validate a contract and store it. REFUSES an invalid one and returns every problem at once, with the schema, so you repair it in a single round trip instead of four. A contract that contradicts itself is caught here, before any worker has started.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        contract: { description: "The contract, as an object or a JSON string. A refusal returns the schema it was measured against." },
+      },
+      required: ["contract"],
+    },
+  },
+  {
+    name: "bind_contract",
+    description:
+      "Put a stored contract's decisions in force at PM layer. Refuses any that contradict a decision already recorded rather than overriding it — a new contract quietly winning over a live decision is the failure this tool exists to prevent. Run this before briefing anyone.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        contract: { type: "string", description: "Contract id." },
+        as: { type: "string", description: "Who is binding. Default contract:<id>." },
+      },
+      required: ["contract"],
+    },
+  },
+  {
+    name: "brief_unit",
+    description:
+      "Everything one worker is told, and nothing else: its goal, the files it owns, the decisions it must honour, what it may not decide alone, and what done means. Hand `instructions` to the worker verbatim. Do not also hand it the contract — a worker that can read other units' work reasons about it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        contract: { type: "string", description: "Contract id." },
+        unit: { type: "string", description: "Unit id from the contract." },
+      },
+      required: ["contract", "unit"],
+    },
+  },
+  {
+    name: "fleet_plan",
+    description:
+      "The units in dependency order, with each one's brief, so you can fan out a wave at a time and know what is allowed to start now. Give each worker only its own brief.",
+    inputSchema: {
+      type: "object",
+      properties: { contract: { type: "string", description: "Contract id." } },
+      required: ["contract"],
+    },
+  },
+  {
+    name: "run_acceptance",
+    description:
+      "Runs the command behind every acceptance criterion and reports which passed. The contract's own commands, not an opinion about whether the work looks finished.",
+    inputSchema: {
+      type: "object",
+      properties: { contract: { type: "string", description: "Contract id." } },
+      required: ["contract"],
+    },
+  },
+  {
+    name: "generate_docs",
+    description:
+      "The design doc nobody writes, rendered from the decision log — so it cannot drift from what was actually decided and enforced. Returns markdown, or writes it to a path.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        contract: { type: "string", description: "Contract id." },
+        out: { type: "string", description: "Write the markdown here instead of returning it." },
+      },
+      required: ["contract"],
+    },
+  },
+  {
+    name: "cost_report",
+    description:
+      "What briefing cost against handing every worker the whole contract. Byte counts are measured; token figures are estimates from a stated chars-per-token divisor, and are labelled as such wherever they appear.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        contract: { type: "string", description: "Contract id." },
+        charsPerToken: { type: "number", description: "The divisor behind the token estimate. Default 4." },
+      },
+      required: ["contract"],
+    },
+  },
 ];
 
 const { Server, StdioServerTransport, CallToolRequestSchema, ListToolsRequestSchema } = await loadSdk();
 const server = new Server({ name: "orchestraguard", version: VERSION }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+
+/**
+ * Loads the contract a loop tool was pointed at. Named rather than inlined so
+ * the missing-argument message says what to do next, which is the difference
+ * between an agent recovering and an agent guessing an id.
+ */
+function contractArg(a: Record<string, any>): Contract {
+  const id = typeof a.contract === "string" ? a.contract.trim() : "";
+  if (!id) throw new Error("this tool needs `contract`: the id of a contract stored with write_contract");
+  return loadContract(id, DIR);
+}
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const name = request.params.name;
@@ -193,8 +300,141 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       });
     }
 
+    /* ---------------- v0.2: the loop ---------------- */
+
+    if (name === "write_contract") {
+      let raw: unknown = a.contract;
+      if (typeof raw === "string") {
+        // Raised as a ContractError so a host that sent a malformed string
+        // gets the schema back on the same footing as a structural problem.
+        try { raw = JSON.parse(raw); } catch { throw new ContractError(["contract was sent as a string but is not valid JSON"]); }
+      }
+      const contract = validateContract(raw);
+      const path = saveContract(contract, DIR);
+      return ok({
+        written: true,
+        contract: contract.id,
+        path,
+        units: contract.units.map((u) => u.id),
+        decisions: contract.decisions.length,
+        acceptance: contract.acceptance.length,
+        waves: waves(contract),
+        next: "Call bind_contract to put its decisions in force, then brief_unit for each unit in the first wave.",
+      });
+    }
+
+    if (name === "bind_contract") {
+      const contract = contractArg(a);
+      const active = activeDecisions(readDecisions(DIR));
+      const author = (typeof a.as === "string" && a.as.trim()) || `contract:${contract.id}`;
+      const bound: string[] = [];
+      const refused: Record<string, unknown>[] = [];
+
+      for (const d of contract.decisions) {
+        const key = `${d.kind}::${normalizeSubject(d.subject)}`;
+        const prior = active.find((x) => `${x.kind}::${normalizeSubject(x.subject)}` === key);
+        const spec = kindSpec(d.kind);
+        if (prior && spec.conflicts(spec.parse(prior.value), spec.parse(d.value))) {
+          // Refuse rather than supersede: superseding a live decision stays a
+          // deliberate, authored act, not something a new contract does on the way in.
+          refused.push({
+            subject: d.subject,
+            contractSays: spec.render(spec.parse(d.value)),
+            alreadyDecided: spec.render(spec.parse(prior.value)),
+            by: `${prior.author} (${prior.layer})`,
+            decisionId: prior.id,
+          });
+          continue;
+        }
+        if (prior) continue;
+        appendDecision({
+          id: nextId(readDecisions(DIR)), kind: d.kind, subject: d.subject, value: d.value,
+          layer: "pm", author, rationale: d.rationale, supersedes: null, at: new Date().toISOString(),
+        }, DIR);
+        bound.push(d.subject);
+      }
+
+      return ok({
+        contract: contract.id,
+        bound,
+        refused,
+        next: refused.length
+          ? "Each refusal is a real disagreement. Adopt the existing value, or record_decision at layer \"pm\" with supersedes set to the decision you are replacing."
+          : "All binding decisions are in force. Brief the first wave.",
+      });
+    }
+
+    if (name === "brief_unit") {
+      const contract = contractArg(a);
+      const unit = typeof a.unit === "string" ? a.unit.trim() : "";
+      if (!contract.units.some((u) => u.id === unit)) {
+        throw new Error(`no unit "${unit}" in "${contract.id}" — units are: ${contract.units.map((u) => u.id).join(", ")}`);
+      }
+      const brief = briefFor(contract, unit, activeDecisions(readDecisions(DIR)));
+      return ok({
+        ...brief,
+        next: "Hand `instructions` to the worker verbatim, and nothing else from this contract.",
+      });
+    }
+
+    if (name === "fleet_plan") {
+      const contract = contractArg(a);
+      const active = activeDecisions(readDecisions(DIR));
+      return ok({
+        contract: contract.id,
+        waves: waves(contract).map((w, i) => ({ wave: i + 1, units: w.map((u) => briefFor(contract, u, active)) })),
+        next: "Units within a wave run in parallel. Give each worker only its own brief.",
+      });
+    }
+
+    if (name === "run_acceptance") {
+      const contract = contractArg(a);
+      const results = runAcceptance(contract);
+      const failed = results.filter((r) => !r.passed);
+      return ok({
+        contract: contract.id,
+        satisfied: failed.length === 0,
+        passed: results.length - failed.length,
+        total: results.length,
+        results,
+        note: "These are the commands the contract named. A criterion nobody can run is not evidence.",
+      });
+    }
+
+    if (name === "generate_docs") {
+      const contract = contractArg(a);
+      const markdown = generateDocs(contract, readDecisions(DIR));
+      if (typeof a.out === "string" && a.out.trim()) {
+        writeFileSync(a.out, markdown, "utf8");
+        return ok({ contract: contract.id, path: a.out, bytes: markdown.length });
+      }
+      return ok({ contract: contract.id, markdown });
+    }
+
+    if (name === "cost_report") {
+      const contract = contractArg(a);
+      const cpt = typeof a.charsPerToken === "number" && a.charsPerToken > 0 ? a.charsPerToken : 4;
+      const rep = costReport(contract, activeDecisions(readDecisions(DIR)), cpt);
+      return ok({
+        ...rep,
+        savedPct: Math.round((1 - rep.ratio) * 100),
+        // The package measures bytes. Saying so next to every token figure is
+        // the whole reason these numbers can be quoted at all.
+        estimate: `Token figures are ESTIMATES: bytes divided by ${rep.charsPerToken} chars per token. No tokenizer ships with this package, so these are divisions, not counts.`,
+      });
+    }
+
     throw new Error(`Unknown tool "${name}"`);
   } catch (err) {
+    // The validator collects every problem in one pass. Flattening it to a
+    // single message would hand the caller one fix per round trip, which is
+    // the cost the one-pass validator was written to avoid.
+    if (err instanceof ContractError) {
+      return {
+        isError: true,
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "contract is not valid", problems: err.problems, schema: SCHEMA }, null, 2) }],
+      };
+    }
     return { isError: true, content: [{ type: "text" as const, text: err instanceof Error ? err.message : String(err) }] };
   }
 });

@@ -53,3 +53,74 @@ export interface KindSpec {
   /** One-line rendering for the escalation packet. */
   render(value: unknown): string;
 }
+
+/* ------------------------------------------------------------------ *
+ * v0.2 — the contract                                                 *
+ * ------------------------------------------------------------------ */
+
+/** A decision stated in a contract, before it has an id or a timestamp. */
+export interface ContractDecision {
+  kind: Kind;
+  subject: string;
+  value: unknown;
+  rationale?: string;
+}
+
+/** One worker's share of the work. */
+export interface Unit {
+  id: string;
+  goal: string;
+  /** Globs the worker owns. Globs, not contents — the worker has a filesystem. */
+  files: string[];
+  /**
+   * Kinds this unit may settle on its own. Everything else must be requested,
+   * which is what makes the gate load-bearing rather than advisory.
+   */
+  mayDecide: Kind[];
+  dependsOn: string[];
+  notes?: string;
+}
+
+/** A criterion with a command behind it. Without the command it is a wish. */
+export interface Acceptance {
+  id: string;
+  statement: string;
+  check: string;
+  unit: string;
+}
+
+export interface Contract {
+  id: string;
+  goal: string;
+  scope: { in: string[]; out: string[] };
+  decisions: ContractDecision[];
+  units: Unit[];
+  acceptance: Acceptance[];
+}
+
+/** What one worker is told, and nothing else. */
+export interface Brief {
+  contract: string;
+  unit: string;
+  goal: string;
+  files: string[];
+  /** Decisions already in force that this unit must honour. */
+  binding: { kind: Kind; subject: string; value: unknown; rationale?: string }[];
+  mayDecide: Kind[];
+  mustRequest: Kind[];
+  acceptance: { id: string; statement: string; check: string }[];
+  dependsOn: string[];
+  /** Instruction text the host hands the worker verbatim. */
+  instructions: string;
+}
+
+export interface CheckResult {
+  id: string;
+  statement: string;
+  check: string;
+  unit: string;
+  passed: boolean;
+  code: number | null;
+  ms: number;
+  output: string;
+}

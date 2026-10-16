@@ -20,3 +20,41 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm publish --access public
+
+  # The npm publish above is only half of a release: the MCP registry entry
+  # points at a package version, and left behind it advertises the old one.
+  # Both failed publish runs so far were the registry correctly refusing to
+  # overwrite a version that had already been pushed by hand — the OIDC
+  # exchange itself worked, which is why this is wired the same way.
+  mcp-registry:
+    needs: npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install mcp-publisher
+        run: |
+          set -euo pipefail
+          VERSION="$(curl -fsSL https://api.github.com/repos/modelcontextprotocol/registry/releases/latest | jq -r .tag_name)"
+          VERSION="${VERSION#v}"
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/v${VERSION}/mcp-publisher_${VERSION}_linux_amd64.tar.gz" \
+            | tar xz mcp-publisher
+          ./mcp-publisher --version
+
+      - name: the registry version must match the package version
+        run: |
+          set -euo pipefail
+          PKG="$(jq -r .version package.json)"
+          SRV="$(jq -r .version server.json)"
+          SRVPKG="$(jq -r '.packages[0].version' server.json)"
+          if [ "$PKG" != "$SRV" ] || [ "$PKG" != "$SRVPKG" ]; then
+            echo "version drift: package.json=$PKG server.json=$SRV packages[0]=$SRVPKG"
+            exit 1
+          fi
+          echo "all three agree on $PKG"
+
+      - run: ./mcp-publisher login github-oidc
+      - run: ./mcp-publisher publish
