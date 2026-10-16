@@ -1,7 +1,7 @@
 {
   "name": "orchestraguard",
   "displayName": "orchestraguard",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Agents that can't contradict each other. A decision log for hierarchical coding agents, with deterministic contradiction detection and an escalation ladder.",
   "author": {
     "name": "Harsh N. Chandak",
@@ -37,7 +37,10 @@
         "-p",
         "@modelcontextprotocol/sdk",
         "orchestraguard-mcp"
-      ]
+      ],
+      "env": {
+        "ORCHESTRAGUARD_DIR": "${user_config.decisions_dir}"
+      }
     }
   }
 }
