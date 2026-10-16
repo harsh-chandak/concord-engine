@@ -2,43 +2,97 @@
 
 **Agent orchestration never drifts.**
 
-Parallel agents don't scale past the human in the middle.
+Describe a task. A fleet of agents builds it. They come back with work that is
+finished, tested and documented — and that agrees with itself, because none of
+them was allowed to contradict a decision another had already made.
 
-You run five agents to go faster. Four of them are right. The product is broken,
-and the only thing that catches it is you — reading everything, holding the
-whole picture, re-explaining decisions that were already made.
+Parallel agents don't scale past the human in the middle. You run five to go
+faster, four of them are right, the product is broken, and the only thing that
+catches it is you — reading everything, holding the whole picture,
+re-explaining choices that were already settled.
 
-That's not a prompting problem. Your agents have **memory** and they have
-**verification**, and neither one answers the question that actually breaks a
+That isn't a prompting problem. Your agents have **memory** and they have
+**verification**, and neither answers the question that actually breaks a
 parallel run:
 
-> Did these two agents just decide incompatible things?
+> Did these two agents just settle the same question differently?
 
-orchestraguard answers it, and refuses the second decision.
+orchestraguard answers it by comparison, never by a model, and refuses the
+second answer at the moment it is written.
 
-[![Two leads decide the same field differently inside one Claude Code session. The second decision is refused, the PM overrides, and both leads build the same thing.](assets/brag.gif)](https://github.com/harsh-chandak/orchestraguard/blob/main/assets/brag.mp4)
+[![A real Claude Code session: a refunds feature is split across four workers, two of them settle the error format differently, and the second is refused with the decision already in force, who made it and why.](assets/brag.gif)](https://github.com/harsh-chandak/orchestraguard/blob/main/assets/brag.mp4)
+
+<sub>Recorded, not drawn. `brag/record.mjs` runs the real CLI and captures its
+output verbatim; `brag/video.html` only renders what was captured.</sub>
+
+## What a decision is
+
+This is the part that gets undersold. A "decision" is not a variable name. It
+is **any question two agents could answer differently and both be reasonable** —
+and the cost is never the question itself, it's that nothing goes red.
+
+| Kind | Real examples |
+| --- | --- |
+| `convention` | money is integer minor units, never a float · timestamps are UTC ISO-8601 strings · pagination is cursor-based · every non-2xx body is `{"error":"<message>"}` · retries are idempotent and capped at 3 · migrations ship in two reversible stages |
+| `api-contract` | `POST /api/orders` returns 201, not 200 · tenant scoping lives in the path, not a header |
+| `enum` | order status is `pending\|paid\|shipped` · roles are `owner\|admin\|member` · webhook events are a closed set |
+| `schema` | `id` is a uuid and not null · `amount_cents` is an integer · soft deletes use `deleted_at`, not a boolean |
+| `naming` | the identifier is `user_id` · the destination field is `url`, not `target` |
+
+Four agents implementing four reasonable answers to "what does an error body
+look like" produce four green test suites and one broken product. That is the
+whole category, and it is much wider than route paths.
 
 ## The failure it stops
 
-Your backend lead decides the identifier is `user_id`. Your frontend lead,
-working in parallel, decides `userId`.
-
-Both are defensible. Both sets of workers implement them faithfully. Both pass
-their own tests. Nothing is red. You find out at integration — because *you*
-noticed.
+A refunds feature, split across a backend worker and a client worker. The
+backend settles the error shape. The client, working in parallel and with no
+visibility into the backend's files, reaches a different answer:
 
 ```
-● frontend-lead · record_decision
-    naming: User Identifier in API Payloads = userId
+$ orchestraguard decide --unit client --kind convention \
+    --subject "error response body shape" \
+    --value 'every non-2xx body is {"code":"<slug>","detail":"<message>"}' --as client
 
-    ✗ REFUSED — contradicts a decision already in force
-        existing   user_id   backend-lead (lead)
-                   "matches the users table column"
-        resolve by pm
+refused this contradicts a decision already in force.
+  d-003  api (lead): error response body shape = every non-2xx body is {"error":"<message>"}
+  because: the client shows it to a person
+  yours:   every non-2xx body is {"code":"<slug>","detail":"<message>"}
+
+  Adopt the existing value, or supersede it deliberately:
+    --supersedes d-003 --layer pm      (an override, recorded as one)
+    --force                            (record the disagreement for `check` to surface)
 ```
 
-The agent is stopped at the moment it tries to disagree. Not at integration.
-Not by you.
+<sub>Verbatim from the recording above.</sub>
+
+The agent is stopped at the moment it tries to disagree, and told what is in
+force, who decided it, why, and the two legitimate ways out. Not at
+integration. Not by you.
+
+## Three ways to run it
+
+**As a skill, which is how most people will use it.** Describe the task; the
+agent runs the whole loop — authors the contract, binds it, briefs each
+worker, fans out, gates every decision, runs the acceptance checks, writes the
+design doc.
+
+```
+/orchestraguard:orchestraguard add refunds across the API, the client and the schema
+/orchestraguard:orchestraguard migrate us off the legacy auth tables, five workers
+/orchestraguard:orchestraguard rename the tenant concept to workspace everywhere
+```
+
+Nothing about the task has to be small, and nothing has to be a route.
+
+**As an MCP server**, so an agent already mid-task can reach the gate without
+being handed a workflow. Twelve tools: `write_contract`, `bind_contract`,
+`brief_unit`, `fleet_plan`, `run_acceptance`, `generate_docs`, `cost_report`,
+plus `record_decision`, `binding_decisions`, `open_conflicts`,
+`record_attempt`, `status`.
+
+**As a CLI**, for humans and for CI. `orchestraguard check` exits non-zero
+when anything contradicts, which is a one-line pipeline step.
 
 ## Why this isn't another memory tool
 
@@ -164,7 +218,7 @@ prevent.
 ## What one worker gets
 
 A brief, and not the conversation. This is the actual brief the unit that wrote
-this file was given, abridged where marked and rewrapped to fit:
+this file was given. Verbatim, abridged only where marked:
 
 ```
 $ orchestraguard brief --contract orchestraguard-v2 readme
@@ -172,33 +226,35 @@ $ orchestraguard brief --contract orchestraguard-v2 readme
 You are one worker on "orchestraguard-v2". Your unit is "readme".
 
 GOAL
-  Rewrite README.md around the loop without losing the v0.1 pitch that the
-  gate is the product.
+  Rewrite README.md around the loop without losing the v0.1 pitch that the gate is the product.
 
 FILES YOU OWN
   README.md
   Do not edit files outside this list. Another worker owns them.
 
 DECISIONS ALREADY IN FORCE — these are not suggestions
-  - [naming] cli command that runs acceptance checks = accept  (verify already
-    means route verification in v0.1 and renaming it would break installed users)
-  - [convention] how token figures are presented = every token figure is
-    labelled an estimate and states its chars-per-token assumption  (the package
-    measures bytes; calling bytes tokens would be the kind of unsourced number
-    this project exists to avoid)
-  ...
+  - [convention] model calls inside the package = no file in the package may call a model or open a network connection; enforced by a test  (the one defensible sentence is that agreement is decided by comparison, never by a model — if authoring moves inside the package that stops being true)
+  - [naming] cli flag for selecting a contract = --contract  (every loop command takes it, so it has to be the same word everywhere)
+  ... 3 more decisions in force
 
 WHAT YOU MAY DECIDE
   nothing — you write code and decide nothing
 
 WHAT YOU MUST NOT DECIDE ALONE
   naming, convention, api-contract, enum, schema
-  If your work requires one of these, call record_decision. If it is refused,
-  a decision already covers it: adopt the existing value, do not work around it.
+
+RECORD A DECISION LIKE THIS — the flags are what enforce the two lists above
+  orchestraguard decide --contract orchestraguard-v2 --unit readme \
+    --kind <kind> --subject "<what>" --value '<value>' --as readme --rationale "<why>"
+
+  Omitting --unit skips the check on what you may decide. Use the MCP tool
+  record_decision if you have it; it gates the same way.
+  A refusal means a decision already covers this: adopt the existing value.
+  Do not work around it, and do not --force it.
 
 DONE MEANS
   [a-readme] the README covers the loop and keeps the gate pitch
-       $ grep -q 'loop' README.md && grep -q 'refus' README.md
+       $ test -f README.md && grep -q 'spec --schema' README.md && grep -q 'refus' README.md && grep -q -i 'estimate' README.md
 ```
 
 `fleet` prints all of them at once, grouped into waves by `dependsOn`, so the
@@ -238,6 +294,12 @@ claude plugin install orchestraguard@harsh-chandak
 <sub>The `harsh-chandak` marketplace is hosted in the shadowjoin repo and carries
 both tools — that first line is not a typo.</sub>
 
+Then describe the work and let it run the loop:
+
+```
+/orchestraguard:orchestraguard add refunds across the API, the client and the schema
+```
+
 Or without Claude Code:
 
 ```bash
@@ -249,15 +311,21 @@ npx orchestraguard --help
 Leads and the PM decide. **Workers write code and decide nothing.**
 
 ```bash
-orchestraguard decide --kind naming \
-  --subject "user identifier in API payloads" \
-  --value user_id --as backend-lead \
-  --rationale "matches the users table column"
+# a decision, gated: --unit enforces what this unit is allowed to settle,
+# and the subject must be one the contract declares
+orchestraguard decide --contract add-refunds --unit api \
+  --kind convention --subject "error response body shape" \
+  --value 'every non-2xx body is {"error":"<message>"}' \
+  --as api --rationale "the client shows it to a person"
 
 orchestraguard check     # exits 1 if anything contradicts
 orchestraguard verify    # are the decided routes actually served?
 orchestraguard report    # how often did a conflict reach you?
 ```
+
+Outside a contract, `decide` still refuses a decision that contradicts one in
+force — it just cannot check what a unit was allowed to settle, because
+without `--unit` there is nothing that says.
 
 `verify` means route verification, as it did in v0.1. Acceptance criteria are
 run by `accept`.
@@ -342,19 +410,19 @@ small, fixed, and identical across the run. A transcript is none of those
 things.
 
 The package measures **bytes**, because bytes are what it can count. Run on
-this repo's own v0.2 contract — five units, five binding decisions:
+this repo's own contract — five units, five binding decisions. Reproduce it
+by cloning and running the same command:
 
 ```
 $ orchestraguard cost --contract orchestraguard-v2
+  mcp                2333 B brief   vs 4132 B whole contract
+  skill              2470 B brief   vs 4132 B whole contract
+  tests              2286 B brief   vs 4132 B whole contract
+  readme             2297 B brief   vs 4132 B whole contract
+  e2e                2214 B brief   vs 4132 B whole contract
 
-  mcp                2007 B brief   vs 3847 B whole contract
-  skill              2009 B brief   vs 3847 B whole contract
-  tests              1895 B brief   vs 3847 B whole contract
-  readme             1900 B brief   vs 3847 B whole contract
-  e2e                1860 B brief   vs 3847 B whole contract
-
-  9671 B sent instead of 19235 B — 50% less
-  ~2418 vs ~4809 tokens, ESTIMATED at 4 chars/token.
+  11600 B sent instead of 20660 B — 44% less
+  ~2900 vs ~5165 tokens, ESTIMATED at 4 chars/token.
   No tokenizer ships with this package; these are divisions, not counts.
 ```
 

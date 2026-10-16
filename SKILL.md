@@ -5,15 +5,45 @@ description: Run a fleet of coding agents on one task without them contradicting
 
 # orchestraguard
 
-In a hierarchy of agents, each layer can be locally correct while the product
-is broken. The backend lead decides the identifier is `user_id`; the frontend
-lead decides `userId`. Both are reasonable, both sets of workers implement them
-faithfully, both pass their own tests, and the human finds out at integration.
+The user describes a task. You split it across workers, and they come back
+with work that agrees with itself — because none of them was allowed to
+contradict a decision another had already made.
 
-orchestraguard holds those decisions and refuses to accept a contradicting one.
-Around that gate it runs a loop: you author a contract, it validates, binds,
-briefs, verifies and documents. **The package never calls a model.** You author;
-it compares. That is why its answers are the same every time.
+In a hierarchy of agents every layer can be locally correct while the product
+is broken. The question is never only "what is this field called". It is any
+question two workers could answer differently and both be reasonable:
+
+- is money an integer in minor units, or a decimal?
+- what does a non-2xx body look like?
+- is pagination cursor-based or offset-based?
+- does tenant scoping live in the path or a header?
+- is the order status set `pending|paid|shipped`, or does it include `refunded`?
+- do migrations ship in one stage or two reversible ones?
+
+Four workers pick four reasonable answers, write four passing test suites, and
+the product is broken with nothing red anywhere. That is the failure this
+prevents.
+
+orchestraguard holds those decisions and refuses a contradicting one at the
+moment it is written. Around that gate it runs a loop: you author a contract,
+it validates, binds, briefs, verifies and documents. **The package never calls
+a model.** You author; it compares. That is why its answers are the same every
+time.
+
+## When the user invokes this directly
+
+They may just hand you a task:
+
+```
+/orchestraguard:orchestraguard add refunds across the API, the client and the schema
+/orchestraguard:orchestraguard migrate us off the legacy auth tables, five workers
+/orchestraguard:orchestraguard rename the tenant concept to workspace everywhere
+```
+
+Treat that as the goal of the run and start at step 1 — author the contract.
+Do not ask them to write it; authoring is your job, validating is the
+package's. Ask only if the task is genuinely ambiguous about scope, and ask
+once.
 
 ## The rule that makes this cheap
 

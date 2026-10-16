@@ -1,22 +1,34 @@
 <!doctype html>
 <meta charset="utf-8" />
+<!--
+  Renders brag/session.js, which is produced by brag/record.mjs running the
+  real CLI and capturing its stdout and stderr verbatim. Nothing on screen is
+  typed by hand except the user's prompt and the short narration lines, which
+  are styled differently so they cannot be read as program output.
+-->
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:1200px; height:760px; background:#010409; overflow:hidden; }
   body { display:flex; align-items:center; justify-content:center;
          font-family: ui-monospace, "SF Mono", Menlo, monospace; }
-  .term { width:1120px; height:694px; background:#0d1117; border:1px solid #30363d;
-          border-radius:10px; box-shadow:0 24px 70px rgba(0,0,0,.6); overflow:hidden; }
-  .bar { height:34px; background:#161b22; border-bottom:1px solid #30363d;
+  .term { width:1140px; height:706px; background:#0d1117; border:1px solid #30363d;
+          border-radius:10px; box-shadow:0 24px 70px rgba(0,0,0,.6); overflow:hidden;
+          display:flex; flex-direction:column; }
+  .bar { height:34px; flex:0 0 34px; background:#161b22; border-bottom:1px solid #30363d;
          display:flex; align-items:center; padding:0 14px; gap:8px; }
   .dot { width:11px; height:11px; border-radius:50%; }
   .title { color:#6e7681; font-size:12px; margin-left:10px; }
-  .body { padding:16px 24px; font-size:15px; line-height:1.56; color:#c9d1d9; white-space:pre; }
-  .l { opacity:0; } .l.on { opacity:1; }
-  .dim{color:#6e7681}.cy{color:#58a6ff}.gn{color:#3fb950}.yl{color:#d29922}
-  .rd{color:#f85149}.big{color:#f0f6fc;font-weight:600}
-  .bad { background:#f8514922; border-left:3px solid #f85149; margin-left:-24px; padding-left:21px; }
-  .cursor { background:#c9d1d9; color:#0d1117; }
+  .view { flex:1; overflow:hidden; position:relative; }
+  .body { position:absolute; left:0; right:0; top:0; padding:14px 22px;
+          font-size:13.5px; line-height:1.5; color:#c9d1d9; white-space:pre-wrap; }
+  .prompt { color:#f0f6fc; font-weight:600; }
+  .caret  { color:#58a6ff; font-weight:600; }
+  .say    { color:#8b949e; }
+  .cmd    { color:#58a6ff; }
+  .out    { color:#c9d1d9; }
+  .gn { color:#3fb950; } .rd { color:#f85149; } .yl { color:#d29922; } .dim { color:#6e7681; }
+  .bad { background:#f8514918; border-left:3px solid #f85149; padding-left:19px; margin-left:-22px; }
+  .good { border-left:3px solid #3fb950; padding-left:19px; margin-left:-22px; }
 </style>
 <div class="term">
   <div class="bar">
@@ -24,48 +36,76 @@
     <div class="dot" style="background:#27c93f"></div>
     <div class="title">claude code — orchestraguard</div>
   </div>
-  <div class="body" id="out"></div>
+  <div class="view"><div class="body" id="out"></div></div>
 </div>
+<script src="./session.js"></script>
 <script>
-const CMD = "build the checkout flow — backend and frontend leads in parallel";
-// Every line below is real output from the orchestraguard MCP server.
-const LINES = [
-  [2.6,  '  <span class="cy">●</span> <span class="big">backend-lead</span> <span class="dim">· record_decision</span>'],
-  [2.9,  '      naming: user identifier in API payloads = <span class="yl">user_id</span>'],
-  [3.4,  '      <span class="gn">✓ recorded</span>'],
-  [3.8,  ''],
-  [4.2,  '  <span class="cy">●</span> <span class="big">frontend-lead</span> <span class="dim">· record_decision</span>'],
-  [4.5,  '      naming: User Identifier in API Payloads = <span class="yl">userId</span>'],
-  [5.4,  '      <span class="rd">✗ REFUSED</span> <span class="dim">— contradicts a decision already in force</span>', 'bad'],
-  [6.2,  '          <span class="dim">existing  </span> <span class="yl">user_id</span>   backend-lead (lead)'],
-  [6.6,  '          <span class="dim">           "matches the users table column"</span>'],
-  [7.2,  '          <span class="dim">resolve by</span> <span class="big">pm</span>'],
-  [7.8,  ''],
-  [8.3,  '  <span class="cy">●</span> <span class="big">pm</span> <span class="dim">· record_decision  (layer: pm, supersedes d-002)</span>'],
-  [8.7,  '      naming: user identifier in API payloads = <span class="yl">user_id</span>'],
-  [9.3,  '      <span class="gn">✓ recorded</span> <span class="dim">— override</span>'],
-  [9.9,  ''],
-  [10.5, '  <span class="dim">Both leads now build the same thing.</span>'],
-  [11.3, '  <span class="big">Nobody found out at integration.</span>'],
-  [12.4, ''],
-  [12.9, '  <span class="dim">No model was consulted. Agreement is a comparison.</span>'],
-  [13.9, ''],
-  [14.3, '  <span class="dim">orchestraguard  —  agent orchestration never drifts  ·  MIT  ·  Harsh N. Chandak</span>'],
-];
-const TYPE_START = 0.40, TYPE_END = 2.25;
-const out = document.getElementById("out");
-window.renderAt = function (t) {
-  let html = "";
-  const frac = Math.max(0, Math.min(1, (t - TYPE_START) / (TYPE_END - TYPE_START)));
-  const typed = CMD.slice(0, Math.round(frac * CMD.length));
-  const caret = t < TYPE_END + 0.15 ? (Math.floor(t * 2.5) % 2 === 0 ? '<span class="cursor"> </span>' : ' ') : '';
-  html += '<div class="l on"><span class="gn">&gt;</span> ' + typed + caret + '</div>';
-  if (t >= 2.4) html += '<div class="l on">&nbsp;</div>';
-  for (const [at, text, cls] of LINES) {
-    html += '<div class="l ' + (t >= at ? 'on ' : '') + (cls || '') + '">' + (text || '&nbsp;') + '</div>';
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// Long outputs are shown in part so the whole run fits in one view. The
+// elision is marked, with the real line count, rather than silently cropped.
+const CAP = 7;
+function clip(text) {
+  const lines = text.split("\n");
+  if (lines.length <= CAP) return lines;
+  const hidden = lines.length - CAP;
+  return [...lines.slice(0, CAP), `  … ${hidden} more lines`];
+}
+
+/** Colour a real output line by what it actually says. */
+function paint(line) {
+  const h = esc(line);
+  if (/^\s*(refused|REFUSED)\b/.test(line)) return `<span class="rd">${h}</span>`;
+  if (/\brefused\b/.test(line)) return `<span class="rd">${h}</span>`;
+  if (/^\s*(pass|bound|recorded|contract accepted|✓)/.test(line)) {
+    return h.replace(/^(\s*)(pass|bound|recorded|contract accepted|✓)/, '$1<span class="gn">$2</span>');
   }
-  out.innerHTML = html;
+  if (/criteria satisfied|% less|% MORE/.test(line)) return `<span class="yl">${h}</span>`;
+  if (/^\s*(…|No tokenizer|A brief carries)/.test(line)) return `<span class="dim">${h}</span>`;
+  if (/^(GOAL|FILES YOU OWN|DECISIONS ALREADY IN FORCE|WHAT YOU MAY DECIDE|WHAT YOU MUST NOT|STILL TO BE DECIDED|RECORD A DECISION|DONE MEANS|WAIT FOR|NOTES)/.test(line)) {
+    return `<span class="yl">${h}</span>`;
+  }
+  return h;
+}
+
+// Flatten the session into display lines, each with the time it appears.
+const rows = [];
+let t = 0.55;
+for (const step of window.__SESSION) {
+  if (step.kind === "prompt") {
+    rows.push({ t, html: `<span class="caret">&gt; </span><span class="prompt">${esc(step.text)}</span>` });
+    t += 1.25;
+  } else if (step.kind === "say") {
+    rows.push({ t, html: `<span class="say">${esc(step.text)}</span>` });
+    t += 0.6;
+  } else if (step.kind === "cmd") {
+    rows.push({ t, html: "" });
+    rows.push({ t, html: `<span class="dim">$ </span><span class="cmd">${esc(step.text)}</span>` });
+    t += 0.45;
+  } else if (step.kind === "out") {
+    const cls = step.code !== 0 ? "bad" : "";
+    for (const line of clip(step.text)) {
+      rows.push({ t, html: `<span class="out ${cls}">${paint(line)}</span>` });
+      t += 0.05;
+    }
+    // Hold on a refusal: it is the thing the viewer came to see.
+    t += step.code !== 0 ? 1.7 : 0.35;
+  }
+}
+
+const DURATION = t + 1.2;
+const el = document.getElementById("out");
+const LINE = 13.5 * 1.5;
+const VIEW = 706 - 34 - 28;
+
+window.renderAt = (time) => {
+  const shown = rows.filter((r) => r.t <= time);
+  el.innerHTML = shown.map((r) => `<div>${r.html || "&nbsp;"}</div>`).join("");
+  const overflow = shown.length * LINE - VIEW;
+  el.style.transform = `translateY(${overflow > 0 ? -overflow : 0}px)`;
 };
+
+window.__duration = DURATION;
 window.renderAt(0);
 window.__ready = true;
 </script>
