@@ -13,6 +13,11 @@ things that were already decided.
 agentguard holds the decisions your leads make and **refuses to accept one that
 contradicts another**.
 
+[![Two leads decide the same field differently inside one Claude Code session. The second decision is refused, the PM overrides, and both leads build the same thing.](assets/brag.gif)](https://github.com/harsh-chandak/agentguard/blob/main/assets/brag.mp4)
+
+<sub>Sixteen seconds, no sound. Every line is real output from the MCP server —
+[higher-resolution version](https://github.com/harsh-chandak/agentguard/blob/main/assets/brag.mp4).</sub>
+
 ```
 $ agentguard check
 

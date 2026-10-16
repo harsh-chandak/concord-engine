@@ -1,0 +1,71 @@
+<!doctype html>
+<meta charset="utf-8" />
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1200px; height:760px; background:#010409; overflow:hidden; }
+  body { display:flex; align-items:center; justify-content:center;
+         font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .term { width:1120px; height:694px; background:#0d1117; border:1px solid #30363d;
+          border-radius:10px; box-shadow:0 24px 70px rgba(0,0,0,.6); overflow:hidden; }
+  .bar { height:34px; background:#161b22; border-bottom:1px solid #30363d;
+         display:flex; align-items:center; padding:0 14px; gap:8px; }
+  .dot { width:11px; height:11px; border-radius:50%; }
+  .title { color:#6e7681; font-size:12px; margin-left:10px; }
+  .body { padding:16px 24px; font-size:15px; line-height:1.56; color:#c9d1d9; white-space:pre; }
+  .l { opacity:0; } .l.on { opacity:1; }
+  .dim{color:#6e7681}.cy{color:#58a6ff}.gn{color:#3fb950}.yl{color:#d29922}
+  .rd{color:#f85149}.big{color:#f0f6fc;font-weight:600}
+  .bad { background:#f8514922; border-left:3px solid #f85149; margin-left:-24px; padding-left:21px; }
+  .cursor { background:#c9d1d9; color:#0d1117; }
+</style>
+<div class="term">
+  <div class="bar">
+    <div class="dot" style="background:#ff5f56"></div><div class="dot" style="background:#ffbd2e"></div>
+    <div class="dot" style="background:#27c93f"></div>
+    <div class="title">claude code — two leads, one decision log</div>
+  </div>
+  <div class="body" id="out"></div>
+</div>
+<script>
+const CMD = "build the checkout flow — backend and frontend leads in parallel";
+// Every line below is real output from the agentguard MCP server.
+const LINES = [
+  [2.6,  '  <span class="cy">●</span> <span class="big">backend-lead</span> <span class="dim">· record_decision</span>'],
+  [2.9,  '      naming: user identifier in API payloads = <span class="yl">user_id</span>'],
+  [3.4,  '      <span class="gn">✓ recorded</span>'],
+  [3.8,  ''],
+  [4.2,  '  <span class="cy">●</span> <span class="big">frontend-lead</span> <span class="dim">· record_decision</span>'],
+  [4.5,  '      naming: User Identifier in API Payloads = <span class="yl">userId</span>'],
+  [5.4,  '      <span class="rd">✗ REFUSED</span> <span class="dim">— contradicts a decision already in force</span>', 'bad'],
+  [6.2,  '          <span class="dim">existing  </span> <span class="yl">user_id</span>   backend-lead (lead)'],
+  [6.6,  '          <span class="dim">           "matches the users table column"</span>'],
+  [7.2,  '          <span class="dim">resolve by</span> <span class="big">pm</span>'],
+  [7.8,  ''],
+  [8.3,  '  <span class="cy">●</span> <span class="big">pm</span> <span class="dim">· record_decision  (layer: pm, supersedes d-002)</span>'],
+  [8.7,  '      naming: user identifier in API payloads = <span class="yl">user_id</span>'],
+  [9.3,  '      <span class="gn">✓ recorded</span> <span class="dim">— override</span>'],
+  [9.9,  ''],
+  [10.5, '  <span class="dim">Both leads now build the same thing.</span>'],
+  [11.3, '  <span class="big">Nobody found out at integration.</span>'],
+  [12.4, ''],
+  [12.9, '  <span class="dim">No model was consulted. Agreement is a comparison.</span>'],
+  [13.9, ''],
+  [14.3, '  <span class="dim">agentguard  ·  MIT  ·  Harsh N. Chandak  ·  harsh-chandak.com</span>'],
+];
+const TYPE_START = 0.40, TYPE_END = 2.25;
+const out = document.getElementById("out");
+window.renderAt = function (t) {
+  let html = "";
+  const frac = Math.max(0, Math.min(1, (t - TYPE_START) / (TYPE_END - TYPE_START)));
+  const typed = CMD.slice(0, Math.round(frac * CMD.length));
+  const caret = t < TYPE_END + 0.15 ? (Math.floor(t * 2.5) % 2 === 0 ? '<span class="cursor"> </span>' : ' ') : '';
+  html += '<div class="l on"><span class="gn">&gt;</span> ' + typed + caret + '</div>';
+  if (t >= 2.4) html += '<div class="l on">&nbsp;</div>';
+  for (const [at, text, cls] of LINES) {
+    html += '<div class="l ' + (t >= at ? 'on ' : '') + (cls || '') + '">' + (text || '&nbsp;') + '</div>';
+  }
+  out.innerHTML = html;
+};
+window.renderAt(0);
+window.__ready = true;
+</script>

@@ -3,3 +3,10 @@ dist/
 *.log
 .DS_Store
 .agentguard/
+
+# brag video build artefacts (rendered assets/ outputs ARE committed)
+brag/frames/
+brag/node_modules/
+brag/palette.png
+brag/package.json
+brag/package-lock.json
