@@ -1,5 +1,5 @@
 {
-  "id": "orchestraguard-v2",
+  "id": "concord-engine-v2",
   "goal": "Ship the full loop — contract, bind, brief, fan out, gate, verify, document, account — with the package never calling a model.",
   "scope": {
     "in": [

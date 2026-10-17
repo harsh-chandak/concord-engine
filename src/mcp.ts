@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * orchestraguard MCP server.
+ * concord-engine MCP server.
  *
  * The important behaviour is that `record_decision` REFUSES a decision that
  * contradicts one already in force, and returns the conflict instead. The
@@ -38,11 +38,11 @@ async function loadSdk() {
     return { Server, StdioServerTransport, ...types };
   } catch {
     process.stderr.write(
-      "orchestraguard-mcp needs @modelcontextprotocol/sdk, an optional peer dependency.\n" +
+      "concord-engine-mcp needs @modelcontextprotocol/sdk, an optional peer dependency.\n" +
         "Run it with the SDK provided:\n" +
-        "  npx -y -p orchestraguard -p @modelcontextprotocol/sdk orchestraguard-mcp\n" +
-        "or install it alongside orchestraguard:\n" +
-        "  npm i orchestraguard @modelcontextprotocol/sdk\n",
+        "  npx -y -p concord-engine -p @modelcontextprotocol/sdk concord-engine-mcp\n" +
+        "or install it alongside concord-engine:\n" +
+        "  npm i concord-engine @modelcontextprotocol/sdk\n",
     );
     process.exit(1);
   }
@@ -193,7 +193,7 @@ const TOOLS = [
 ];
 
 const { Server, StdioServerTransport, CallToolRequestSchema, ListToolsRequestSchema } = await loadSdk();
-const server = new Server({ name: "orchestraguard", version: VERSION }, { capabilities: { tools: {} } });
+const server = new Server({ name: "concord-engine", version: VERSION }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 

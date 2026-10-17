@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Record a REAL orchestraguard session and write it out for the renderer.
+ * Record a REAL concord-engine session and write it out for the renderer.
  *
  * The previous demo was a hand-written HTML mock of a terminal: the layout
  * was real, the output was invented. For a tool whose whole argument is that
@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = resolve(HERE, "../dist/cli.js");
-const box = mkdtempSync(join(tmpdir(), "orchestraguard-demo-"));
+const box = mkdtempSync(join(tmpdir(), "concord-engine-demo-"));
 const session = [];
 
 const say = (text) => session.push({ kind: "say", text });
@@ -116,24 +116,24 @@ try {
   prompt("add refunds — split it across a backend and a frontend worker");
   say("I'll write the contract first, then fan out.");
 
-  run("orchestraguard spec --from add-refunds.json", ["spec", "--from", "add-refunds.json"]);
+  run("concord-engine spec --from add-refunds.json", ["spec", "--from", "add-refunds.json"]);
   say("Binding it, so the decisions hold before anyone writes code.");
-  run("orchestraguard bind --contract add-refunds", ["bind", "--contract", "add-refunds"]);
-  run("orchestraguard fleet --contract add-refunds", ["fleet", "--contract", "add-refunds"]);
+  run("concord-engine bind --contract add-refunds", ["bind", "--contract", "add-refunds"]);
+  run("concord-engine fleet --contract add-refunds", ["fleet", "--contract", "add-refunds"]);
 
   say("Each worker gets its brief — not the contract, and not this conversation.");
-  run("orchestraguard brief --contract add-refunds api",
+  run("concord-engine brief --contract add-refunds api",
       ["brief", "--contract", "add-refunds", "api"]);
 
   say("The api worker settles the error shape.");
-  run('orchestraguard decide --unit api --kind convention --subject "error response body shape" ...',
+  run('concord-engine decide --unit api --kind convention --subject "error response body shape" ...',
       ["decide", "--contract", "add-refunds", "--unit", "api", "--kind", "convention",
        "--subject", "error response body shape",
        "--value", 'every non-2xx body is {"error":"<message>"}',
        "--as", "api", "--rationale", "the client shows it to a person"]);
 
   say("Meanwhile the client worker, in parallel, reaches a different answer.");
-  run('orchestraguard decide --unit client --kind convention --subject "error response body shape" ...',
+  run('concord-engine decide --unit client --kind convention --subject "error response body shape" ...',
       ["decide", "--contract", "add-refunds", "--unit", "client", "--kind", "convention",
        "--subject", "error response body shape",
        "--value", 'every non-2xx body is {"code":"<slug>","detail":"<message>"}',
@@ -141,8 +141,8 @@ try {
       { expectFailure: true });
 
   say("Refused at the moment it was written — not found at integration.");
-  run("orchestraguard accept --contract add-refunds", ["accept", "--contract", "add-refunds"]);
-  run("orchestraguard cost --contract add-refunds", ["cost", "--contract", "add-refunds"]);
+  run("concord-engine accept --contract add-refunds", ["accept", "--contract", "add-refunds"]);
+  run("concord-engine cost --contract add-refunds", ["cost", "--contract", "add-refunds"]);
 
   const js = `window.__SESSION = ${JSON.stringify(session, null, 2)};\n`;
   writeFileSync(join(HERE, "session.js"), js);

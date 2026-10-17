@@ -26,7 +26,7 @@ jobs:
           # The repo dogfoods the loop: this contract drove v0.2's own build.
           # If a change breaks the validator, it breaks here before it breaks
           # for anyone who wrote a contract against the published schema.
-          node dist/cli.js spec --from .orchestraguard/contracts/orchestraguard-v2.json --dir "$(mktemp -d)"
+          node dist/cli.js spec --from .concord-engine/contracts/concord-engine-v2.json --dir "$(mktemp -d)"
           # The worked example is cited in the README; it must stay valid too.
           node dist/cli.js spec --from examples/linkfold.contract.json --dir "$(mktemp -d)"
 

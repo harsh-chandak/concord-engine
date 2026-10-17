@@ -10,7 +10,7 @@ import { kindSpec, normalizeSubject } from "./compare.js";
  * parse-rewrite cycle, which is what an append-only log wants, and it needs no
  * parser, which keeps the package at zero runtime dependencies.
  */
-export const DEFAULT_DIR = ".orchestraguard";
+export const DEFAULT_DIR = ".concord-engine";
 
 /**
  * Where the log lives: an explicit flag, else the environment, else the
@@ -45,7 +45,7 @@ export function findContradiction(
   return null;
 }
 
-export function resolveDir(flag?: string, env = process.env.ORCHESTRAGUARD_DIR): string {
+export function resolveDir(flag?: string, env = process.env.CONCORD_ENGINE_DIR): string {
   return flag?.trim() || env?.trim() || DEFAULT_DIR;
 }
 export const decisionsPath = (dir = DEFAULT_DIR) => join(dir, "decisions.jsonl");

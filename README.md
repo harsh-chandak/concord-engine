@@ -1,6 +1,6 @@
-# orchestraguard
+# Concord Engine
 
-**Agent orchestration never drifts.**
+**Scale parallelism. Preserve alignment.**
 
 Describe a task. A fleet of agents builds it. They come back with work that is
 finished, tested and documented — and that agrees with itself, because none of
@@ -17,10 +17,10 @@ parallel run:
 
 > Did these two agents just settle the same question differently?
 
-orchestraguard answers it by comparison, never by a model, and refuses the
+concord-engine answers it by comparison, never by a model, and refuses the
 second answer at the moment it is written.
 
-[![A real Claude Code session: a refunds feature is split across four workers, two of them settle the error format differently, and the second is refused with the decision already in force, who made it and why.](assets/brag.gif)](https://github.com/harsh-chandak/orchestraguard/blob/main/assets/brag.gif)
+[![A real Claude Code session: a refunds feature is split across four workers, two of them settle the error format differently, and the second is refused with the decision already in force, who made it and why.](assets/brag.gif)](https://github.com/harsh-chandak/concord-engine/blob/main/assets/brag.gif)
 
 <sub>Recorded, not drawn. `brag/record.mjs` runs the real CLI and captures its
 output verbatim; `brag/video.html` only renders what was captured.</sub>
@@ -50,7 +50,7 @@ backend settles the error shape. The client, working in parallel and with no
 visibility into the backend's files, reaches a different answer:
 
 ```
-$ orchestraguard decide --unit client --kind convention \
+$ concord-engine decide --unit client --kind convention \
     --subject "error response body shape" \
     --value 'every non-2xx body is {"code":"<slug>","detail":"<message>"}' --as client
 
@@ -78,9 +78,9 @@ worker, fans out, gates every decision, runs the acceptance checks, writes the
 design doc.
 
 ```
-/orchestraguard:orchestraguard add refunds across the API, the client and the schema
-/orchestraguard:orchestraguard migrate us off the legacy auth tables, five workers
-/orchestraguard:orchestraguard rename the tenant concept to workspace everywhere
+/concord-engine:concord-engine add refunds across the API, the client and the schema
+/concord-engine:concord-engine migrate us off the legacy auth tables, five workers
+/concord-engine:concord-engine rename the tenant concept to workspace everywhere
 ```
 
 Nothing about the task has to be small, and nothing has to be a route.
@@ -91,7 +91,7 @@ being handed a workflow. Twelve tools: `write_contract`, `bind_contract`,
 plus `record_decision`, `binding_decisions`, `open_conflicts`,
 `record_attempt`, `status`.
 
-**As a CLI**, for humans and for CI. `orchestraguard check` exits non-zero
+**As a CLI**, for humans and for CI. `concord-engine check` exits non-zero
 when anything contradicts, which is a one-line pipeline step.
 
 ## Why this isn't another memory tool
@@ -108,7 +108,7 @@ enough that people stop trusting it. A coordination layer nobody trusts is
 worse than none, because it adds latency and false alarms to a workflow that
 had neither.
 
-**orchestraguard decides agreement by comparison, never by a model.** Decisions are
+**concord-engine decides agreement by comparison, never by a model.** Decisions are
 typed and narrow, so a contradiction is a comparison: same subject, different
 value. No API call exists anywhere in the decision path — there's a test that
 fails if any file in that path can reach outside the process, and a second one
@@ -148,14 +148,14 @@ first line of code.
 ```
 
 ```bash
-orchestraguard spec --schema              # the contract shape, as JSON Schema
-orchestraguard spec --from contract.json  # validate and store it
-orchestraguard bind   --contract add-refunds
-orchestraguard fleet  --contract add-refunds            # every brief, as JSON
-orchestraguard brief  --contract add-refunds api        # one worker's brief
-orchestraguard accept --contract add-refunds            # run every check
-orchestraguard docs   --contract add-refunds
-orchestraguard cost   --contract add-refunds
+concord-engine spec --schema              # the contract shape, as JSON Schema
+concord-engine spec --from contract.json  # validate and store it
+concord-engine bind   --contract add-refunds
+concord-engine fleet  --contract add-refunds            # every brief, as JSON
+concord-engine brief  --contract add-refunds api        # one worker's brief
+concord-engine accept --contract add-refunds            # run every check
+concord-engine docs   --contract add-refunds
+concord-engine cost   --contract add-refunds
 ```
 
 Every loop command takes `--contract`. The MCP server exposes the same set as
@@ -203,9 +203,9 @@ or when a criterion has no command. All of it in one pass, because fixing one
 error per round trip is the expensive way to find four:
 
 ```
-$ orchestraguard spec --from contract.json
+$ concord-engine spec --from contract.json
 
-orchestraguard: contract is not valid:
+concord-engine: contract is not valid:
   - unit "api" depends on "ui", which is not a unit in this contract
   - acceptance[a1] has no check — a criterion without a command is a wish
 ```
@@ -221,9 +221,9 @@ A brief, and not the conversation. This is the actual brief the unit that wrote
 this file was given. Verbatim, abridged only where marked:
 
 ```
-$ orchestraguard brief --contract orchestraguard-v2 readme
+$ concord-engine brief --contract concord-engine-v2 readme
 
-You are one worker on "orchestraguard-v2". Your unit is "readme".
+You are one worker on "concord-engine-v2". Your unit is "readme".
 
 GOAL
   Rewrite README.md around the loop without losing the v0.1 pitch that the gate is the product.
@@ -244,7 +244,7 @@ WHAT YOU MUST NOT DECIDE ALONE
   naming, convention, api-contract, enum, schema
 
 RECORD A DECISION LIKE THIS — the flags are what enforce the two lists above
-  orchestraguard decide --contract orchestraguard-v2 --unit readme \
+  concord-engine decide --contract concord-engine-v2 --unit readme \
     --kind <kind> --subject "<what>" --value '<value>' --as readme --rationale "<why>"
 
   Omitting --unit skips the check on what you may decide. Use the MCP tool
@@ -288,7 +288,7 @@ each other, and that only stays trustworthy while no model is in the path.
 
 ```bash
 claude plugin marketplace add harsh-chandak/shadowjoin
-claude plugin install orchestraguard@harsh-chandak
+claude plugin install concord-engine@harsh-chandak
 ```
 
 <sub>The `harsh-chandak` marketplace is hosted in the shadowjoin repo and carries
@@ -297,13 +297,13 @@ both tools — that first line is not a typo.</sub>
 Then describe the work and let it run the loop:
 
 ```
-/orchestraguard:orchestraguard add refunds across the API, the client and the schema
+/concord-engine:concord-engine add refunds across the API, the client and the schema
 ```
 
 Or without Claude Code:
 
 ```bash
-npx orchestraguard --help
+npx concord-engine --help
 ```
 
 ## Use
@@ -313,14 +313,14 @@ Leads and the PM decide. **Workers write code and decide nothing.**
 ```bash
 # a decision, gated: --unit enforces what this unit is allowed to settle,
 # and the subject must be one the contract declares
-orchestraguard decide --contract add-refunds --unit api \
+concord-engine decide --contract add-refunds --unit api \
   --kind convention --subject "error response body shape" \
   --value 'every non-2xx body is {"error":"<message>"}' \
   --as api --rationale "the client shows it to a person"
 
-orchestraguard check     # exits 1 if anything contradicts
-orchestraguard verify    # are the decided routes actually served?
-orchestraguard report    # how often did a conflict reach you?
+concord-engine check     # exits 1 if anything contradicts
+concord-engine verify    # are the decided routes actually served?
+concord-engine report    # how often did a conflict reach you?
 ```
 
 Outside a contract, `decide` still refuses a decision that contradicts one in
@@ -342,12 +342,12 @@ Five kinds, each with its own comparison rule:
 
 ## Where the log lives
 
-`.orchestraguard/decisions.jsonl`, in the working directory — append-only JSON
+`.concord-engine/decisions.jsonl`, in the working directory — append-only JSON
 Lines, one decision per line, no parser needed to read it. Contracts sit beside
-it in `.orchestraguard/contracts/`.
+it in `.concord-engine/contracts/`.
 
 **Commit it.** The log is the contract between your agents, so it has to travel
-with the code the way a migration does. Set `ORCHESTRAGUARD_DIR` or pass
+with the code the way a migration does. Set `CONCORD_ENGINE_DIR` or pass
 `--dir` to put it elsewhere; the CLI and the MCP server resolve the location
 the same way, so `check` always audits the file the server writes.
 
@@ -389,7 +389,7 @@ nothing to keep current, because nobody writes it.
 ## The number that matters
 
 ```
-$ orchestraguard report
+$ concord-engine report
 
   47 conflicts recorded
     settled without you     44
@@ -414,7 +414,7 @@ this repo's own contract — five units, five binding decisions. Reproduce it
 by cloning and running the same command:
 
 ```
-$ orchestraguard cost --contract orchestraguard-v2
+$ concord-engine cost --contract concord-engine-v2
   mcp                2333 B brief   vs 4132 B whole contract
   skill              2470 B brief   vs 4132 B whole contract
   tests              2286 B brief   vs 4132 B whole contract
@@ -443,9 +443,9 @@ run settled the error format twice under two names. CI revalidates it on every
 push.
 
 ```bash
-orchestraguard spec --from examples/linkfold.contract.json
-orchestraguard fleet --contract linkfold
-orchestraguard brief --contract linkfold api
+concord-engine spec --from examples/linkfold.contract.json
+concord-engine fleet --contract linkfold
+concord-engine brief --contract linkfold api
 ```
 
 ## Honest limits

@@ -1,4 +1,4 @@
-# orchestraguard — spec
+# concord-engine — spec
 
 **Agents that can't contradict each other.**
 
@@ -43,7 +43,7 @@ conflict. That is slow, costs a call per check, and is wrong often enough that
 people stop trusting the answer — at which point the tool is worse than nothing,
 because it adds latency and false alarms to a workflow that already had neither.
 
-orchestraguard makes decisions typed and narrow, so a contradiction is a comparison.
+concord-engine makes decisions typed and narrow, so a contradiction is a comparison.
 Deterministic, no model call, same answer every time.
 
 ---
@@ -187,16 +187,16 @@ subagents, Codex, Copilot or a hand-rolled loop, because the integration surface
 is a CLI and a directory:
 
 ```
-.orchestraguard/
+.concord-engine/
   decisions.yaml      # append-only, superseded entries retained
   conflicts.yaml      # open conflicts and their escalation state
 ```
 
 ```bash
-orchestraguard decide --kind naming --subject "..." --value user_id --as backend-lead
-orchestraguard check                 # horizontal + vertical, exit non-zero on conflict
-orchestraguard conflicts             # what is open and whose turn it is
-orchestraguard report                # the metric
+concord-engine decide --kind naming --subject "..." --value user_id --as backend-lead
+concord-engine check                 # horizontal + vertical, exit non-zero on conflict
+concord-engine conflicts             # what is open and whose turn it is
+concord-engine report                # the metric
 ```
 
 ## v1 scope
@@ -207,7 +207,7 @@ In:
 - horizontal contradiction detection (deterministic)
 - escalation state machine with the two-attempt budget
 - the packet format
-- `orchestraguard report`
+- `concord-engine report`
 - one vertical detector: `api-contract`, server-side routes for Express and
   FastAPI
 
@@ -227,7 +227,7 @@ Out, deliberately:
    match enough? Free text risks two leads describing the same subject
    differently and never colliding — a silent miss, which is the exact failure
    class this tool exists to catch.
-3. Who runs `orchestraguard check` — a hook, the orchestrator, or CI? Probably all three,
+3. Who runs `concord-engine check` — a hook, the orchestrator, or CI? Probably all three,
    but the default matters.
 
 Question 2 is the one that decides whether this works.

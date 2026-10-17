@@ -83,8 +83,8 @@ subprocesses.
 ### Fixed — all four found by running the loop on a second project
 
 A URL shortener built by four workers who never saw each other's code. It
-works, and it exposed four defects that building orchestraguard with
-orchestraguard did not.
+works, and it exposed four defects that building concord-engine with
+concord-engine did not.
 
 - **`decide` did not gate.** The MCP server refused a contradicting decision
   from the first release while the CLI recorded it silently, so which
@@ -107,7 +107,7 @@ orchestraguard did not.
 ### Fixed
 
 - The log directory is resolved in one place by both the CLI and the MCP
-  server. They resolved it separately before, so with `ORCHESTRAGUARD_DIR` set
+  server. They resolved it separately before, so with `CONCORD_ENGINE_DIR` set
   the server wrote to one file while `check` audited another — the gate and
   the audit reading different logs. Empty and whitespace now count as unset,
   which matters because a host that expands an unset config placeholder to
@@ -115,6 +115,6 @@ orchestraguard did not.
 
 ### Notes
 
-This release was built using its own loop. `contracts/orchestraguard-v2.json`
+This release was built using its own loop. `contracts/concord-engine-v2.json`
 is the contract that drove it, CI revalidates it on every push, and the five
 units in it were built by five workers that each received only their brief.

@@ -4,7 +4,7 @@
 # is wrong in six ways and has to be told so in one pass.
 #
 # Everything happens in a throwaway directory. This script never reads or
-# writes the repo's own .orchestraguard/.
+# writes the repo's own .concord-engine/.
 set -uo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 CLI="node $ROOT/dist/cli.js"
@@ -17,7 +17,7 @@ trap 'rm -rf "$TMP"' EXIT
 W="$TMP/state"
 # Belt and braces: the flag is what the CLI reads, the environment is what
 # anything it spawns would read. Both point away from the repo.
-export ORCHESTRAGUARD_DIR="$W"
+export CONCORD_ENGINE_DIR="$W"
 og()   { $CLI --dir "$W" "$@"; }
 json() { node -e "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>{try{console.log(new Function('j','return '+process.argv[1])(JSON.parse(s)))}catch{console.log('ERR')}})" "$1"; }
 has()  { printf '%s' "$1" | grep -qF -- "$2"; }
@@ -209,7 +209,7 @@ out=$(og docs --contract loop-ok 2>&1)
 [ $? -eq 0 ] && ok "docs exits 0" || bad "docs exits 0" "$(printf '%s' "$out" | head -2)"
 has "$out" "id column name" && ok "docs contains a decision" || bad "docs contains a decision" "decision missing"
 has "$out" "the warehouse already spells it user_id" && ok "docs contains that decision's rationale" || bad "docs contains that decision's rationale" "rationale missing"
-has "$out" "orchestraguard docs" && ok "docs says it was generated, not written" || bad "docs says it was generated, not written" "no provenance line"
+has "$out" "concord-engine docs" && ok "docs says it was generated, not written" || bad "docs says it was generated, not written" "no provenance line"
 
 echo "COST"
 out=$(og cost --contract loop-ok 2>&1)
@@ -220,7 +220,7 @@ unlabelled=$(printf '%s\n' "$out" | grep -F "tokens" | grep -vF "ESTIMATED")
 [ -z "$unlabelled" ] && ok "no token figure is printed unlabelled" || bad "no token figure is printed unlabelled" "$unlabelled"
 
 echo "ISOLATION"
-[ ! -e "$ROOT/.orchestraguard/contracts/loop-ok.json" ] && ok "the repo's own log was never touched" || bad "the repo's own log was never touched" "loop-ok leaked into $ROOT/.orchestraguard"
+[ ! -e "$ROOT/.concord-engine/contracts/loop-ok.json" ] && ok "the repo's own log was never touched" || bad "the repo's own log was never touched" "loop-ok leaked into $ROOT/.concord-engine"
 
 echo
 

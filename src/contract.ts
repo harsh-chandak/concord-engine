@@ -24,7 +24,7 @@ const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
  */
 export const SCHEMA = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
-  title: "orchestraguard contract",
+  title: "concord-engine contract",
   type: "object",
   required: ["id", "goal", "scope", "decisions", "units", "acceptance"],
   additionalProperties: false,
@@ -364,7 +364,7 @@ export function briefFor(contract: Contract, unitId: string, active: Decision[] 
       ``,
     ].join("\n") : null,
     `RECORD A DECISION LIKE THIS — the flags are what enforce the two lists above`,
-    `  orchestraguard decide --contract ${contract.id} --unit ${unit.id} \\`,
+    `  concord-engine decide --contract ${contract.id} --unit ${unit.id} \\`,
     `    --kind <kind> --subject "<what>" --value '<value>' --as ${unit.id} --rationale "<why>"`,
     ``,
     `  Omitting --unit skips the check on what you may decide. Use the MCP tool`,

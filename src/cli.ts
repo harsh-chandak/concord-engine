@@ -15,31 +15,31 @@ import type { Decision, Layer } from "./types.js";
 const VERSION: string = createRequire(import.meta.url)("../package.json").version;
 
 const USAGE = `
-orchestraguard — agents that can't contradict each other.
+concord-engine — agents that can't contradict each other.
 
-  orchestraguard decide --kind <kind> --subject "<what>" --value <v> --as <author>
+  concord-engine decide --kind <kind> --subject "<what>" --value <v> --as <author>
       [--layer lead|pm] [--rationale "<why>"] [--supersedes <id>]
 
-  orchestraguard check          detect contradictions; exit 1 if any are open
-  orchestraguard conflicts      what is open, and whose turn it is
-  orchestraguard attempt <id>   record a failed resolution attempt; escalates on the 2nd
-  orchestraguard verify [path]  check api-contract decisions against the code
-  orchestraguard report         how often conflicts reached a human
-  orchestraguard kinds          the decision kinds and their value shapes
+  concord-engine check          detect contradictions; exit 1 if any are open
+  concord-engine conflicts      what is open, and whose turn it is
+  concord-engine attempt <id>   record a failed resolution attempt; escalates on the 2nd
+  concord-engine verify [path]  check api-contract decisions against the code
+  concord-engine report         how often conflicts reached a human
+  concord-engine kinds          the decision kinds and their value shapes
 
 the loop — describe a task, run a fleet, finish with it proved and written up:
 
-  orchestraguard spec --schema          the contract shape your agent fills in
-  orchestraguard spec --from <f.json>   validate and store a contract
-  orchestraguard bind --contract <id>   make its decisions binding, at PM layer
-  orchestraguard fleet --contract <id>  the waves, and who can start now
-  orchestraguard brief --contract <id> <unit>
+  concord-engine spec --schema          the contract shape your agent fills in
+  concord-engine spec --from <f.json>   validate and store a contract
+  concord-engine bind --contract <id>   make its decisions binding, at PM layer
+  concord-engine fleet --contract <id>  the waves, and who can start now
+  concord-engine brief --contract <id> <unit>
                                         exactly what one worker is told
-  orchestraguard accept --contract <id> run every acceptance check
-  orchestraguard docs --contract <id>   the design doc, from the log
-  orchestraguard cost --contract <id>   what the fan-out saved (estimated)
+  concord-engine accept --contract <id> run every acceptance check
+  concord-engine docs --contract <id>   the design doc, from the log
+  concord-engine cost --contract <id>   what the fan-out saved (estimated)
 
-  --dir <path>   where the log lives (default ${DEFAULT_DIR}, or $ORCHESTRAGUARD_DIR)
+  --dir <path>   where the log lives (default ${DEFAULT_DIR}, or $CONCORD_ENGINE_DIR)
   --json         machine-readable output
   --version      print the version and exit
 
@@ -58,7 +58,7 @@ function parseValue(raw: string): unknown {
 /** A contract id from --contract or the first positional after the command. */
 function requireContract(values: { contract?: string }, positionals: string[]): string {
   const id = values.contract ?? positionals[1];
-  if (!id) throw new Error("this command needs --contract <id> (see `orchestraguard spec --from ...`)");
+  if (!id) throw new Error("this command needs --contract <id> (see `concord-engine spec --from ...`)");
   return id;
 }
 
@@ -223,7 +223,7 @@ async function main(): Promise<number> {
 
   if (cmd === "attempt") {
     const id = positionals[1];
-    if (!id) { console.error("usage: orchestraguard attempt <conflict-id> [--note \"what was tried\"]"); return 2; }
+    if (!id) { console.error("usage: concord-engine attempt <conflict-id> [--note \"what was tried\"]"); return 2; }
     const stored = readConflicts(dir).find((c) => c.id === id);
     if (!stored) { console.error(`no conflict ${id}`); return 2; }
     const noted = values.note ? { ...stored, notes: [...stored.notes, values.note] } : stored;
@@ -321,7 +321,7 @@ async function main(): Promise<number> {
       console.log(`${dim(`wave ${w.wave}`)}  ${w.units.length} worker${w.units.length === 1 ? "" : "s"} in parallel`);
       for (const b of w.units) console.log(`    ${b.unit.padEnd(16)} ${dim(b.goal)}`);
     }
-    console.log(`\n  ${dim("one brief per unit:")} orchestraguard brief --contract ${contract.id} <unit>`);
+    console.log(`\n  ${dim("one brief per unit:")} concord-engine brief --contract ${contract.id} <unit>`);
     return 0;
   }
 
@@ -371,5 +371,5 @@ async function main(): Promise<number> {
 
 main().then(
   (code) => process.exit(code),
-  (err: unknown) => { console.error(`\norchestraguard: ${err instanceof Error ? err.message : String(err)}\n`); process.exit(2); },
+  (err: unknown) => { console.error(`\nconcord-engine: ${err instanceof Error ? err.message : String(err)}\n`); process.exit(2); },
 );

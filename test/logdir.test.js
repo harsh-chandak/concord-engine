@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { resolveDir, DEFAULT_DIR } from "../dist/index.js";
 
 const CLI = new URL("../dist/cli.js", import.meta.url).pathname;
-const box = () => mkdtempSync(join(tmpdir(), "orchestraguard-dir-"));
+const box = () => mkdtempSync(join(tmpdir(), "concord-engine-dir-"));
 
 const decide = (cwd, env = {}, args = []) =>
   execFileSync(process.execPath, [CLI, "decide",
@@ -15,7 +15,7 @@ const decide = (cwd, env = {}, args = []) =>
     "--as", "lead-a", "--json", ...args,
   ], { cwd, env: { ...process.env, ...env }, encoding: "utf8" });
 
-// REGRESSION: the Claude Code plugin passed ORCHESTRAGUARD_DIR as an
+// REGRESSION: the Claude Code plugin passed CONCORD_ENGINE_DIR as an
 // unexpanded ${user_config.*} placeholder, which the host expanded to "".
 // The MCP server resolved its directory with `??`, which only guards
 // null/undefined, so DIR became "" and the log was written to a bare
@@ -35,16 +35,16 @@ test("resolveDir: flag beats environment beats default", () => {
 });
 
 // The same resolution, observed end to end through the CLI process.
-// REGRESSION: the Claude Code plugin passed ORCHESTRAGUARD_DIR as an
+// REGRESSION: the Claude Code plugin passed CONCORD_ENGINE_DIR as an
 // unexpanded ${user_config.*} placeholder, which arrived as "". `??` let the
 // empty string through, so the log was written to a bare decisions.jsonl in
 // whatever cwd the MCP server happened to have — outside the project, and
 // invisible to `check`.
-test("REGRESSION: an empty ORCHESTRAGUARD_DIR falls back to the default", () => {
+test("REGRESSION: an empty CONCORD_ENGINE_DIR falls back to the default", () => {
   const cwd = box();
   try {
-    decide(cwd, { ORCHESTRAGUARD_DIR: "" });
-    assert.ok(existsSync(join(cwd, ".orchestraguard", "decisions.jsonl")),
+    decide(cwd, { CONCORD_ENGINE_DIR: "" });
+    assert.ok(existsSync(join(cwd, ".concord-engine", "decisions.jsonl")),
       "an empty env var must not relocate the log");
     assert.ok(!existsSync(join(cwd, "decisions.jsonl")),
       "nothing may be written to the cwd root");
@@ -54,19 +54,19 @@ test("REGRESSION: an empty ORCHESTRAGUARD_DIR falls back to the default", () => 
 test("REGRESSION: whitespace is treated as unset, not as a directory name", () => {
   const cwd = box();
   try {
-    decide(cwd, { ORCHESTRAGUARD_DIR: "   " });
-    assert.ok(existsSync(join(cwd, ".orchestraguard", "decisions.jsonl")));
-    assert.deepEqual(readdirSync(cwd), [".orchestraguard"]);
+    decide(cwd, { CONCORD_ENGINE_DIR: "   " });
+    assert.ok(existsSync(join(cwd, ".concord-engine", "decisions.jsonl")));
+    assert.deepEqual(readdirSync(cwd), [".concord-engine"]);
   } finally { rmSync(cwd, { recursive: true, force: true }); }
 });
 
 // The CLI read only --dir while the MCP server read only the environment, so
 // setting the documented variable made `check` audit a file the server had
 // never written to.
-test("REGRESSION: the CLI honours ORCHESTRAGUARD_DIR, like the MCP server", () => {
+test("REGRESSION: the CLI honours CONCORD_ENGINE_DIR, like the MCP server", () => {
   const cwd = box();
   try {
-    decide(cwd, { ORCHESTRAGUARD_DIR: "team-decisions" });
+    decide(cwd, { CONCORD_ENGINE_DIR: "team-decisions" });
     assert.ok(existsSync(join(cwd, "team-decisions", "decisions.jsonl")),
       "the CLI must write where the environment says the log lives");
   } finally { rmSync(cwd, { recursive: true, force: true }); }
@@ -75,7 +75,7 @@ test("REGRESSION: the CLI honours ORCHESTRAGUARD_DIR, like the MCP server", () =
 test("--dir beats the environment", () => {
   const cwd = box();
   try {
-    decide(cwd, { ORCHESTRAGUARD_DIR: "from-env" }, ["--dir", "from-flag"]);
+    decide(cwd, { CONCORD_ENGINE_DIR: "from-env" }, ["--dir", "from-flag"]);
     assert.ok(existsSync(join(cwd, "from-flag", "decisions.jsonl")));
     assert.ok(!existsSync(join(cwd, "from-env")));
   } finally { rmSync(cwd, { recursive: true, force: true }); }

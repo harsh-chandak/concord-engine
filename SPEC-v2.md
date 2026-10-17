@@ -1,4 +1,4 @@
-# orchestraguard v0.2 — the full loop
+# concord-engine v0.2 — the full loop
 
 v0.1 shipped the gate: agents record typed decisions, and a decision that
 contradicts one already in force is refused. That is one organ. This is the
@@ -7,7 +7,7 @@ body around it.
 ## The ask
 
 > Anyone calling the package, skill or MCP server describes their task — a
-> feature, a bug fix, a chore, anything. orchestraguard fans out a development
+> feature, a bug fix, a chore, anything. concord-engine fans out a development
 > fleet and returns work that is finished, tested and documented, having first
 > written a spec contract, and does it token-efficiently.
 
@@ -127,7 +127,7 @@ roughly **5× less per turn** than the main thread, and cache writes were
 and they must not appear in published material as product claims.** What the
 package itself can measure is bytes, which is what `cost` reports.
 
-`orchestraguard cost` reports brief bytes against the whole-context baseline
+`concord-engine cost` reports brief bytes against the whole-context baseline
 and labels the result an **estimate**, because the package does not ship a
 tokenizer and will not pretend to count what it cannot.
 

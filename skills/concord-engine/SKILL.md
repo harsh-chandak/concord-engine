@@ -1,9 +1,9 @@
 ---
-name: orchestraguard
-description: Run a fleet of coding agents on one task without them contradicting each other. Use when a task is big enough to split across subagents, when asked to orchestrate, fan out, parallelize or run a PM/lead/worker hierarchy, when writing a spec contract for a multi-agent run, before recording a naming, convention, API-contract, enum or schema choice, before writing code that depends on one, and whenever two agents disagree. Also use when a fan-out is burning context and the workers need briefs instead of the whole conversation. Requires the orchestraguard MCP server.
+name: concord-engine
+description: Run a fleet of coding agents on one task without them contradicting each other. Use when a task is big enough to split across subagents, when asked to orchestrate, fan out, parallelize or run a PM/lead/worker hierarchy, when writing a spec contract for a multi-agent run, before recording a naming, convention, API-contract, enum or schema choice, before writing code that depends on one, and whenever two agents disagree. Also use when a fan-out is burning context and the workers need briefs instead of the whole conversation. Requires the concord-engine MCP server.
 ---
 
-# orchestraguard
+# concord-engine
 
 The user describes a task. You split it across workers, and they come back
 with work that agrees with itself — because none of them was allowed to
@@ -24,7 +24,7 @@ Four workers pick four reasonable answers, write four passing test suites, and
 the product is broken with nothing red anywhere. That is the failure this
 prevents.
 
-orchestraguard holds those decisions and refuses a contradicting one at the
+concord-engine holds those decisions and refuses a contradicting one at the
 moment it is written. Around that gate it runs a loop: you author a contract,
 it validates, binds, briefs, verifies and documents. **The package never calls
 a model.** You author; it compares. That is why its answers are the same every
@@ -35,9 +35,9 @@ time.
 They may just hand you a task:
 
 ```
-/orchestraguard:orchestraguard add refunds across the API, the client and the schema
-/orchestraguard:orchestraguard migrate us off the legacy auth tables, five workers
-/orchestraguard:orchestraguard rename the tenant concept to workspace everywhere
+/concord-engine:concord-engine add refunds across the API, the client and the schema
+/concord-engine:concord-engine migrate us off the legacy auth tables, five workers
+/concord-engine:concord-engine rename the tenant concept to workspace everywhere
 ```
 
 Treat that as the goal of the run and start at step 1 — author the contract.
@@ -49,7 +49,7 @@ once.
 
 **Give each worker its brief. Not the contract, not the conversation.**
 
-`orchestraguard brief --contract <id> <unit>` prints the exact text one worker
+`concord-engine brief --contract <id> <unit>` prints the exact text one worker
 should receive: its goal, the files it owns, the decisions binding it, what it
 may not decide, and what "done" means. Paste that into the subagent prompt and
 stop there.
@@ -104,7 +104,7 @@ that check does not run.
 Get the shape first — do not guess it:
 
 ```bash
-orchestraguard spec --schema
+concord-engine spec --schema
 ```
 
 Write JSON to that schema. One document, six required keys:
@@ -149,7 +149,7 @@ Write it as if nobody will explain it to the workers, because nobody will.
 ### 2. Validate and store
 
 ```bash
-orchestraguard spec --from contract.json
+concord-engine spec --from contract.json
 ```
 
 Validation is not a formality. A contract is rejected when a unit depends on a
@@ -161,7 +161,7 @@ reported at once — fix them in one pass and re-run.
 ### 3. Bind
 
 ```bash
-orchestraguard bind --contract add-refunds
+concord-engine bind --contract add-refunds
 ```
 
 The contract's decisions enter the log at PM layer. If one contradicts a
@@ -176,7 +176,7 @@ or override on purpose.
 ### 4. Plan the waves
 
 ```bash
-orchestraguard fleet --contract add-refunds
+concord-engine fleet --contract add-refunds
 ```
 
 Units that can run in parallel, grouped. Everything in wave 1 starts now;
@@ -187,7 +187,7 @@ wave 2 starts when wave 1 is done and accepted.
 For each unit in the wave:
 
 ```bash
-orchestraguard brief --contract add-refunds api
+concord-engine brief --contract add-refunds api
 ```
 
 Spawn one subagent and give it that output as its whole prompt. One unit, one
@@ -226,7 +226,7 @@ userId in the public API" lets them rule without re-deriving it.
 ### 7. Accept
 
 ```bash
-orchestraguard accept --contract add-refunds
+concord-engine accept --contract add-refunds
 ```
 
 Runs every acceptance check and exits non-zero if any fail. All at once, not in
@@ -239,7 +239,7 @@ wave on the claim.
 ### 8. Document
 
 ```bash
-orchestraguard docs --contract add-refunds --out DESIGN.md
+concord-engine docs --contract add-refunds --out DESIGN.md
 ```
 
 The design doc is generated from the decision log — what was decided, by whom,
@@ -249,7 +249,7 @@ data rendered.
 ### 9. Account
 
 ```bash
-orchestraguard cost --contract add-refunds
+concord-engine cost --contract add-refunds
 ```
 
 Brief bytes against the whole-context baseline. Every token figure it prints is
@@ -263,8 +263,8 @@ avoid.
 `--contract <id>` selects the contract for every loop command — same word
 everywhere. `--json` gives machine-readable output on all of them, which is
 what you want when you are driving the fan-out programmatically. `--dir <path>`
-or `ORCHESTRAGUARD_DIR` moves the log and contract store off the default
-`.orchestraguard/`.
+or `CONCORD_ENGINE_DIR` moves the log and contract store off the default
+`.concord-engine/`.
 
 ## MCP tools
 
@@ -279,7 +279,7 @@ Give them the packet, not the transcript: the two positions, who holds each,
 why, and what has already been tried. If you find yourself writing "see the
 logs," you have not saved them anything.
 
-`orchestraguard report` prints how often a conflict reached a human. That
+`concord-engine report` prints how often a conflict reached a human. That
 number, not agents launched, is what says whether the fleet handled itself.
 
 ## What this is not

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { runAcceptance, generateDocs, costReport } from "../dist/run.js";
 import { validateContract, briefFor } from "../dist/contract.js";
 
-const box = () => mkdtempSync(join(tmpdir(), "orchestraguard-run-"));
+const box = () => mkdtempSync(join(tmpdir(), "concord-engine-run-"));
 
 /** A contract whose acceptance commands the test replaces per case. */
 const contract = (acceptance, over = {}) => validateContract({
@@ -94,7 +94,7 @@ test("checks run in the directory they were given, not the test's cwd", () => {
 test("a check is told which criterion it is proving", () => {
   const d = box();
   try {
-    writeFileSync(join(d, "env.js"), `console.log(process.env.ORCHESTRAGUARD_ACCEPTANCE);\n`, "utf8");
+    writeFileSync(join(d, "env.js"), `console.log(process.env.CONCORD_ENGINE_ACCEPTANCE);\n`, "utf8");
     const c = contract([{ id: "a-core", statement: "s", check: "node env.js", unit: "core" }]);
     assert.equal(runAcceptance(c, d)[0].output, "a-core");
   } finally { rmSync(d, { recursive: true, force: true }); }

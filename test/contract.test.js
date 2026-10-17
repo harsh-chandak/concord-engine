@@ -8,7 +8,7 @@ import {
   contractsDir, contractPath, SCHEMA, ContractError, declaredSubjects } from "../dist/contract.js";
 import { KIND_IDS } from "../dist/index.js";
 
-const box = () => mkdtempSync(join(tmpdir(), "orchestraguard-contract-"));
+const box = () => mkdtempSync(join(tmpdir(), "concord-engine-contract-"));
 
 /** A contract with nothing wrong with it. Every rejection test breaks one thing. */
 const ok = (over = {}) => ({

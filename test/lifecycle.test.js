@@ -9,7 +9,7 @@ import {
 import { reconcile, readConflicts, writeConflict, conflictId } from "../dist/conflicts.js";
 import { packet, report } from "../dist/format.js";
 
-const dir = () => mkdtempSync(join(tmpdir(), "orchestraguard-"));
+const dir = () => mkdtempSync(join(tmpdir(), "concord-engine-"));
 const D = (over) => ({
   id: "d-x", kind: "naming", subject: "user id", value: "user_id",
   layer: "lead", author: "backend-lead", at: "2026-10-16T00:00:00Z", ...over,

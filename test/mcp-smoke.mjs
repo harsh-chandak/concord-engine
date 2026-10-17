@@ -46,7 +46,7 @@ if (!existsSync(SERVER)) die(`${SERVER} is missing. Run \`npm run build\` first.
 const child = spawn(process.execPath, [SERVER], {
   cwd: ROOT,
   stdio: ["pipe", "pipe", "pipe"],
-  env: { ...process.env, ORCHESTRAGUARD_DIR: mkdtempSync(join(tmpdir(), "og-smoke-")) },
+  env: { ...process.env, CONCORD_ENGINE_DIR: mkdtempSync(join(tmpdir(), "og-smoke-")) },
 });
 
 let stderr = "";

@@ -18,7 +18,7 @@ import { createRequire } from "node:module";
 const run = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
 const die = (msg) => { console.error(`\nrefusing to publish: ${msg}\n`); process.exit(1); };
 
-if (process.env.ORCHESTRAGUARD_SKIP_PUBLISH_GUARD === "1") {
+if (process.env.CONCORD_ENGINE_SKIP_PUBLISH_GUARD === "1") {
   console.warn("publish guard skipped by request");
   process.exit(0);
 }

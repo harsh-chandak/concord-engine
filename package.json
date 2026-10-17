@@ -1,7 +1,7 @@
 {
-  "name": "orchestraguard",
-  "version": "0.2.2",
-  "description": "Agent orchestration never drifts. A decision log for hierarchical coding agents that refuses a contradicting decision \u2014 deterministic, no model call.",
+  "name": "concord-engine",
+  "version": "0.3.0",
+  "description": "Scale parallelism. Preserve alignment. A fleet of coding agents builds one task in parallel against a spec contract, and a decision that contradicts one already in force is refused \u2014 deterministically, with no model in the decision path.",
   "keywords": [
     "ai-agents",
     "agent-orchestration",
@@ -21,8 +21,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "orchestraguard": "dist/cli.js",
-    "orchestraguard-mcp": "dist/mcp.js"
+    "concord-engine": "dist/cli.js",
+    "concord-engine-mcp": "dist/mcp.js"
   },
   "files": [
     "dist",
@@ -43,11 +43,11 @@
   "author": "Harsh N. Chandak",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/harsh-chandak/orchestraguard.git"
+    "url": "git+https://github.com/harsh-chandak/concord-engine.git"
   },
-  "homepage": "https://github.com/harsh-chandak/orchestraguard#readme",
+  "homepage": "https://github.com/harsh-chandak/concord-engine#readme",
   "bugs": {
-    "url": "https://github.com/harsh-chandak/orchestraguard/issues"
+    "url": "https://github.com/harsh-chandak/concord-engine/issues"
   },
   "exports": {
     ".": "./dist/index.js",
@@ -61,5 +61,5 @@
       "optional": true
     }
   },
-  "mcpName": "io.github.harsh-chandak/orchestraguard"
+  "mcpName": "io.github.harsh-chandak/concord-engine"
 }
