@@ -17,7 +17,7 @@ parallel run:
 
 > Did these two agents just settle the same question differently?
 
-concord-engine answers it by comparison, never by a model, and refuses the
+Concord Engine answers it by comparison, never by a model, and refuses the
 second answer at the moment it is written.
 
 [![A real Claude Code session: a refunds feature is split across four workers, two of them settle the error format differently, and the second is refused with the decision already in force, who made it and why.](assets/brag.gif)](https://github.com/harsh-chandak/concord-engine/blob/main/assets/brag.gif)
@@ -108,7 +108,7 @@ enough that people stop trusting it. A coordination layer nobody trusts is
 worse than none, because it adds latency and false alarms to a workflow that
 had neither.
 
-**concord-engine decides agreement by comparison, never by a model.** Decisions are
+**Concord Engine decides agreement by comparison, never by a model.** Decisions are
 typed and narrow, so a contradiction is a comparison: same subject, different
 value. No API call exists anywhere in the decision path — there's a test that
 fails if any file in that path can reach outside the process, and a second one

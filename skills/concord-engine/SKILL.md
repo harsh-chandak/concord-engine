@@ -3,7 +3,7 @@ name: concord-engine
 description: Run a fleet of coding agents on one task without them contradicting each other. Use when a task is big enough to split across subagents, when asked to orchestrate, fan out, parallelize or run a PM/lead/worker hierarchy, when writing a spec contract for a multi-agent run, before recording a naming, convention, API-contract, enum or schema choice, before writing code that depends on one, and whenever two agents disagree. Also use when a fan-out is burning context and the workers need briefs instead of the whole conversation. Requires the concord-engine MCP server.
 ---
 
-# concord-engine
+# Concord Engine
 
 The user describes a task. You split it across workers, and they come back
 with work that agrees with itself — because none of them was allowed to
@@ -24,7 +24,7 @@ Four workers pick four reasonable answers, write four passing test suites, and
 the product is broken with nothing red anywhere. That is the failure this
 prevents.
 
-concord-engine holds those decisions and refuses a contradicting one at the
+Concord Engine holds those decisions and refuses a contradicting one at the
 moment it is written. Around that gate it runs a loop: you author a contract,
 it validates, binds, briefs, verifies and documents. **The package never calls
 a model.** You author; it compares. That is why its answers are the same every

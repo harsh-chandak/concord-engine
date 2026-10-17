@@ -87,7 +87,7 @@ window.__SESSION = [
   },
   {
     "kind": "out",
-    "text": "  pass  a-schema   the migration applies cleanly (6ms)\n  pass  a-api      the endpoint answers 201 (5ms)\n  pass  a-client   the client surfaces a refusal (5ms)\n  pass  a-tests    the refund path is covered end to end (4ms)\n\n  4/4 criteria satisfied",
+    "text": "  pass  a-schema   the migration applies cleanly (11ms)\n  pass  a-api      the endpoint answers 201 (6ms)\n  pass  a-client   the client surfaces a refusal (6ms)\n  pass  a-tests    the refund path is covered end to end (6ms)\n\n  4/4 criteria satisfied",
     "code": 0
   },
   {
