@@ -16,7 +16,7 @@ const browser = await puppeteer.launch({
   args: ["--no-sandbox", "--force-device-scale-factor=1", "--hide-scrollbars", "--disable-lcd-text"],
 });
 const page = await browser.newPage();
-await page.setViewport({ width: 1200, height: 760, deviceScaleFactor: 1 });
+await page.setViewport({ width: 880, height: 600, deviceScaleFactor: 1 });
 await page.goto("file://" + resolve(HERE, "video.html"), { waitUntil: "networkidle0" });
 await page.waitForFunction("window.__ready === true", { timeout: 15000 });
 

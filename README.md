@@ -20,10 +20,12 @@ parallel run:
 Concord Engine answers it by comparison, never by a model, and refuses the
 second answer at the moment it is written.
 
-[![A real Claude Code session: a refunds feature is split across four workers, two of them settle the error format differently, and the second is refused with the decision already in force, who made it and why.](assets/brag.gif)](https://github.com/harsh-chandak/concord-engine/blob/main/assets/brag.gif)
+[![A real Claude Code session: two workers on a refunds feature settle the error format differently, the second is refused with the decision already in force, who made it and why, and the acceptance checks then run.](assets/brag.gif)](https://github.com/harsh-chandak/concord-engine/blob/main/assets/brag.gif)
 
 <sub>Recorded, not drawn. `brag/record.mjs` runs the real CLI and captures its
-output verbatim; `brag/video.html` only renders what was captured.</sub>
+output verbatim; `brag/video.html` only renders what was captured. The loop
+shows the refusal arc — the full run also writes the contract, binds it and
+briefs four workers first.</sub>
 
 ## What a decision is
 

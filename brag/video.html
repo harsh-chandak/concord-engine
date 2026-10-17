@@ -8,10 +8,10 @@
 -->
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  html,body { width:1200px; height:760px; background:#010409; overflow:hidden; }
+  html,body { width:880px; height:600px; background:#010409; overflow:hidden; }
   body { display:flex; align-items:center; justify-content:center;
          font-family: ui-monospace, "SF Mono", Menlo, monospace; }
-  .term { width:1140px; height:706px; background:#0d1117; border:1px solid #30363d;
+  .term { width:848px; height:568px; background:#0d1117; border:1px solid #30363d;
           border-radius:10px; box-shadow:0 24px 70px rgba(0,0,0,.6); overflow:hidden;
           display:flex; flex-direction:column; }
   .bar { height:34px; flex:0 0 34px; background:#161b22; border-bottom:1px solid #30363d;
@@ -20,7 +20,7 @@
   .title { color:#6e7681; font-size:12px; margin-left:10px; }
   .view { flex:1; overflow:hidden; position:relative; }
   .body { position:absolute; left:0; right:0; top:0; padding:14px 22px;
-          font-size:13.5px; line-height:1.5; color:#c9d1d9; white-space:pre-wrap; }
+          font-size:23px; line-height:1.5; color:#c9d1d9; white-space:pre-wrap; word-break:break-word; }
   .prompt { color:#f0f6fc; font-weight:600; }
   .caret  { color:#58a6ff; font-weight:600; }
   .say    { color:#8b949e; }
@@ -44,7 +44,7 @@ const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, 
 
 // Long outputs are shown in part so the whole run fits in one view. The
 // elision is marked, with the real line count, rather than silently cropped.
-const CAP = 7;
+const CAP = 5;
 function clip(text) {
   const lines = text.split("\n");
   if (lines.length <= CAP) return lines;
@@ -69,9 +69,16 @@ function paint(line) {
 }
 
 // Flatten the session into display lines, each with the time it appears.
+// The card loop shows the refusal arc, not the whole run. The full session
+// scrolls for 16s, and scrolling repaints every pixel of every frame, which
+// is what makes a GIF enormous — 1.2MB even at card size. The README keeps
+// the full recording; a card wants the payoff. Still entirely real output.
+const FROM = window.__SESSION.findIndex((s) => s.kind === "say" && /api worker settles/.test(s.text));
+const SESSION = FROM === -1 ? window.__SESSION : window.__SESSION.slice(FROM);
+
 const rows = [];
 let t = 0.55;
-for (const step of window.__SESSION) {
+for (const step of SESSION) {
   if (step.kind === "prompt") {
     rows.push({ t, html: `<span class="caret">&gt; </span><span class="prompt">${esc(step.text)}</span>` });
     t += 1.25;
@@ -95,8 +102,8 @@ for (const step of window.__SESSION) {
 
 const DURATION = t + 1.2;
 const el = document.getElementById("out");
-const LINE = 13.5 * 1.5;
-const VIEW = 706 - 34 - 28;
+const LINE = 23 * 1.5;
+const VIEW = 568 - 34 - 28;
 
 window.renderAt = (time) => {
   const shown = rows.filter((r) => r.t <= time);
