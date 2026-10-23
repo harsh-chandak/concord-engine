@@ -43,8 +43,11 @@ o=$($CLI check --dir "$d" --json 2>/dev/null | node -e "let s='';process.stdin.o
 
 d=$(fresh)
 $CLI decide --dir "$d" --kind naming --subject s --value a --as lead-a >/dev/null 2>&1
-$CLI decide --dir "$d" --kind naming --subject s --value b --as lead-b >/dev/null 2>&1
-$CLI decide --dir "$d" --kind naming --subject s --value a --as lead-b --supersedes d-002 >/dev/null 2>&1
+# --force, so there is a real conflict to clear. Without it this second decide
+# is refused, nothing conflicts, and the supersession below proves nothing.
+$CLI decide --dir "$d" --kind naming --subject s --value b --as lead-b --force >/dev/null 2>&1
+$CLI check --dir "$d" --json >/dev/null 2>&1 && bad "a conflict exists to be cleared" "nothing conflicted" || ok "a conflict exists to be cleared"
+$CLI decide --dir "$d" --kind naming --subject s --value a --as lead-b --supersedes d-002 >/dev/null 2>&1 && ok "an override satisfies the gate" || bad "an override satisfies the gate" "refused"
 $CLI check --dir "$d" --json >/dev/null 2>&1 && ok "supersession clears the conflict" || bad "supersession clears the conflict" "still conflicting"
 
 echo "ESCALATION"

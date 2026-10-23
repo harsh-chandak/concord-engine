@@ -146,7 +146,22 @@ async function main(): Promise<number> {
     // decision from the first release while `decide` recorded it silently, so
     // which interface you used decided whether the product's central promise
     // held. --force records anyway, for the deliberate case.
-    const clash = findContradiction(activeDecisions(all), values.kind as Decision["kind"], values.subject!, parseValue(values.value!));
+    // A deliberate override is the other way through, and it has to be a real
+    // one: the id must already be in the log. That also stops a decision
+    // naming the id it is about to be given, which superseded it out of force
+    // the moment it was written — "recorded", exit 0, and not in force.
+    if (values.supersedes && !all.some((d) => d.id === values.supersedes)) {
+      console.error(`${red("refused")} --supersedes ${values.supersedes}: no decision has that id.`);
+      console.error(`  \`concord-engine check --json\` lists the ids in force.`);
+      return 1;
+    }
+
+    // An override replaces what it names, so that decision is no longer in
+    // force to be contradicted. This is the same reading detect() takes
+    // through activeDecisions(), which is why record_decision on the MCP side
+    // never had this bug and `decide` did.
+    const inForce = activeDecisions(all).filter((d) => d.id !== values.supersedes);
+    const clash = findContradiction(inForce, values.kind as Decision["kind"], values.subject!, parseValue(values.value!));
     if (clash && !values.force) {
       const spec = kindSpec(values.kind as Decision["kind"]);
       console.error(`${red("refused")} this contradicts a decision already in force.`);
