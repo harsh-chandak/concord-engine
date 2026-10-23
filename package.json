@@ -1,6 +1,6 @@
 {
   "name": "concord-engine",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Scale parallelism. Preserve alignment. A fleet of coding agents builds one task in parallel against a spec contract, and a decision that contradicts one already in force is refused \u2014 deterministically, with no model in the decision path.",
   "keywords": [
     "ai-agents",
