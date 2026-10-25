@@ -17,7 +17,7 @@ import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { detect, escalate } from "./detect.js";
 import { KIND_IDS, kindSpec, normalizeSubject } from "./compare.js";
-import { appendDecision, readDecisions, nextId, activeDecisions, resolveDir } from "./log.js";
+import { appendDecision, readDecisions, nextId, activeDecisions, resolveDir, withLogLock } from "./log.js";
 import { conflictId, reconcile, readConflicts, writeConflict } from "./conflicts.js";
 import {
   ContractError, SCHEMA, briefFor, loadContract, saveContract, validateContract, waves,
@@ -215,35 +215,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     if (name === "record_decision") {
-      const all = readDecisions(DIR);
-      const layer = (a.layer ?? "lead") as Layer;
-      const candidate: Decision = {
-        id: nextId(all), kind: a.kind, subject: String(a.subject),
-        value: kindSpec(a.kind).parse(a.value), layer, author: String(a.author),
-        rationale: a.rationale, supersedes: a.supersedes ?? null,
-        at: new Date().toISOString(),
-      };
+      // Read, check and append as one step: see withLogLock.
+      return withLogLock(DIR, () => {
+        const all = readDecisions(DIR);
+        const layer = (a.layer ?? "lead") as Layer;
+        const candidate: Decision = {
+          id: nextId(all), kind: a.kind, subject: String(a.subject),
+          value: kindSpec(a.kind).parse(a.value), layer, author: String(a.author),
+          rationale: a.rationale, supersedes: a.supersedes ?? null,
+          at: new Date().toISOString(),
+        };
 
-      // The gate: would this contradict something already in force?
-      const would = detect([...all, candidate]).conflicts
-        .filter((f) => f.decisions.some((d) => d.id === candidate.id));
-      if (would.length) {
-        const f = would[0];
-        return ok({
-          recorded: false,
-          refused: "this contradicts a decision already in force",
-          conflict: {
-            kind: f.kind, subject: f.subject, ownerToResolve: f.owner, reason: f.reason,
-            existing: f.decisions.filter((d) => d.id !== candidate.id)
-              .map((d) => ({ id: d.id, author: d.author, layer: d.layer, value: d.value, rationale: d.rationale })),
-            yours: { value: candidate.value, rationale: candidate.rationale },
-          },
-          next: `Either adopt the existing value, or escalate to ${f.owner}. To override deliberately, record with layer "pm" and supersedes set to the decision you are replacing.`,
-        });
-      }
+        // The gate: would this contradict something already in force?
+        const would = detect([...all, candidate]).conflicts
+          .filter((f) => f.decisions.some((d) => d.id === candidate.id));
+        if (would.length) {
+          const f = would[0];
+          return ok({
+            recorded: false,
+            refused: "this contradicts a decision already in force",
+            conflict: {
+              kind: f.kind, subject: f.subject, ownerToResolve: f.owner, reason: f.reason,
+              existing: f.decisions.filter((d) => d.id !== candidate.id)
+                .map((d) => ({ id: d.id, author: d.author, layer: d.layer, value: d.value, rationale: d.rationale })),
+              yours: { value: candidate.value, rationale: candidate.rationale },
+            },
+            next: `Either adopt the existing value, or escalate to ${f.owner}. To override deliberately, record with layer "pm" and supersedes set to the decision you are replacing.`,
+          });
+        }
 
-      appendDecision(candidate, DIR);
-      return ok({ recorded: true, decision: candidate });
+        appendDecision(candidate, DIR);
+        return ok({ recorded: true, decision: candidate });
+      });
     }
 
     if (name === "binding_decisions") {
@@ -325,35 +328,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     if (name === "bind_contract") {
       const contract = contractArg(a);
-      const active = activeDecisions(readDecisions(DIR));
       const author = (typeof a.as === "string" && a.as.trim()) || `contract:${contract.id}`;
       const bound: string[] = [];
       const refused: Record<string, unknown>[] = [];
 
-      for (const d of contract.decisions) {
-        const key = `${d.kind}::${normalizeSubject(d.subject)}`;
-        const prior = active.find((x) => `${x.kind}::${normalizeSubject(x.subject)}` === key);
-        const spec = kindSpec(d.kind);
-        if (prior && spec.conflicts(spec.parse(prior.value), spec.parse(d.value))) {
-          // Refuse rather than supersede: superseding a live decision stays a
-          // deliberate, authored act, not something a new contract does on the way in.
-          refused.push({
-            subject: d.subject,
-            contractSays: spec.render(spec.parse(d.value)),
-            alreadyDecided: spec.render(spec.parse(prior.value)),
-            by: `${prior.author} (${prior.layer})`,
-            decisionId: prior.id,
-          });
-          continue;
+      withLogLock(DIR, () => {
+        const active = activeDecisions(readDecisions(DIR));
+        for (const d of contract.decisions) {
+          const key = `${d.kind}::${normalizeSubject(d.subject)}`;
+          const prior = active.find((x) => `${x.kind}::${normalizeSubject(x.subject)}` === key);
+          const spec = kindSpec(d.kind);
+          if (prior && spec.conflicts(spec.parse(prior.value), spec.parse(d.value))) {
+            // Refuse rather than supersede: superseding a live decision stays a
+            // deliberate, authored act, not something a new contract does on the way in.
+            refused.push({
+              subject: d.subject,
+              contractSays: spec.render(spec.parse(d.value)),
+              alreadyDecided: spec.render(spec.parse(prior.value)),
+              by: `${prior.author} (${prior.layer})`,
+              decisionId: prior.id,
+            });
+            continue;
+          }
+          if (prior) continue;
+          appendDecision({
+            id: nextId(readDecisions(DIR)), kind: d.kind, subject: d.subject, value: d.value,
+            layer: "pm", author, rationale: d.rationale, supersedes: null, at: new Date().toISOString(),
+          }, DIR);
+          bound.push(d.subject);
         }
-        if (prior) continue;
-        appendDecision({
-          id: nextId(readDecisions(DIR)), kind: d.kind, subject: d.subject, value: d.value,
-          layer: "pm", author, rationale: d.rationale, supersedes: null, at: new Date().toISOString(),
-        }, DIR);
-        bound.push(d.subject);
-      }
 
+      });
       return ok({
         contract: contract.id,
         bound,

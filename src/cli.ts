@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { readFileSync, writeFileSync } from "node:fs";
 import { detect, escalate } from "./detect.js";
 import { KIND_IDS, kindSpec, normalizeSubject } from "./compare.js";
-import { appendDecision, readDecisions, nextId, activeDecisions, findContradiction, DEFAULT_DIR, resolveDir } from "./log.js";
+import { appendDecision, readDecisions, nextId, activeDecisions, findContradiction, withLogLock, DEFAULT_DIR, resolveDir } from "./log.js";
 import { SCHEMA, validateContract, saveContract, loadContract, briefFor, waves, declaredSubjects } from "./contract.js";
 import { runAcceptance, generateDocs, costReport } from "./run.js";
 import { conflictId, reconcile, readConflicts, writeConflict } from "./conflicts.js";
@@ -106,84 +106,87 @@ async function main(): Promise<number> {
     }
     const layer = (values.layer ?? "lead") as Layer;
     if (layer !== "lead" && layer !== "pm") { console.error(`--layer must be lead or pm`); return 2; }
-    const all = readDecisions(dir);
+    // Read, check and append as one step: see withLogLock.
+    return withLogLock(dir, () => {
+      const all = readDecisions(dir);
 
-    // A unit may only settle the kinds its contract allows. Without this the
-    // brief's promise — "if your work needs one of these, it will be refused"
-    // — was false on the CLI path, and a worker could quietly write a kind it
-    // had been told it could not.
-    if (values.unit) {
-      const c = loadContract(requireContract(values, positionals), dir);
-      const unit = c.units.find((u) => u.id === values.unit);
-      if (!unit) { console.error(`no unit "${values.unit}" in contract "${c.id}": ${c.units.map((u) => u.id).join(", ")}`); return 2; }
-      // A subject the contract never named is how two workers describe one
-      // thing two ways. The gate compares subjects by wording, so the second
-      // spelling is simply a different decision and the disagreement between
-      // them is never seen. Refusing here is the only deterministic fix —
-      // matching subjects by similarity would put a judgement back in the
-      // decision path.
-      const declared = declaredSubjects(c);
-      const key = `${values.kind}::${normalizeSubject(values.subject!)}`;
-      if (!declared.has(key) && !values["new-subject"]) {
-        const sameKind = [...declared.values()].filter((d) => d.kind === values.kind);
-        console.error(`${red("refused")} "${values.subject}" is not a subject contract "${c.id}" declares.`);
-        console.error(sameKind.length
-          ? `  declared ${values.kind} subjects:\n${sameKind.map((d) => `    ${d.state === "open" ? "(open)    " : "(decided) "}${d.subject}`).join("\n")}`
-          : `  the contract declares no ${values.kind} subjects at all.`);
-        console.error(`\n  Reuse one of those lines verbatim, or if this really is new:`);
-        console.error(`    --new-subject    (and tell whoever owns the contract to declare it)`);
+      // A unit may only settle the kinds its contract allows. Without this the
+      // brief's promise — "if your work needs one of these, it will be refused"
+      // — was false on the CLI path, and a worker could quietly write a kind it
+      // had been told it could not.
+      if (values.unit) {
+        const c = loadContract(requireContract(values, positionals), dir);
+        const unit = c.units.find((u) => u.id === values.unit);
+        if (!unit) { console.error(`no unit "${values.unit}" in contract "${c.id}": ${c.units.map((u) => u.id).join(", ")}`); return 2; }
+        // A subject the contract never named is how two workers describe one
+        // thing two ways. The gate compares subjects by wording, so the second
+        // spelling is simply a different decision and the disagreement between
+        // them is never seen. Refusing here is the only deterministic fix —
+        // matching subjects by similarity would put a judgement back in the
+        // decision path.
+        const declared = declaredSubjects(c);
+        const key = `${values.kind}::${normalizeSubject(values.subject!)}`;
+        if (!declared.has(key) && !values["new-subject"]) {
+          const sameKind = [...declared.values()].filter((d) => d.kind === values.kind);
+          console.error(`${red("refused")} "${values.subject}" is not a subject contract "${c.id}" declares.`);
+          console.error(sameKind.length
+            ? `  declared ${values.kind} subjects:\n${sameKind.map((d) => `    ${d.state === "open" ? "(open)    " : "(decided) "}${d.subject}`).join("\n")}`
+            : `  the contract declares no ${values.kind} subjects at all.`);
+          console.error(`\n  Reuse one of those lines verbatim, or if this really is new:`);
+          console.error(`    --new-subject    (and tell whoever owns the contract to declare it)`);
+          return 1;
+        }
+        if (!(unit.mayDecide ?? []).includes(values.kind as Decision["kind"])) {
+          console.error(`${red("refused")} unit "${unit.id}" may not decide ${values.kind} on its own.`);
+          console.error(`  it may decide: ${(unit.mayDecide ?? []).join(", ") || "nothing"}`);
+          console.error(`  ask the layer above, or record it as that layer with --layer pm.`);
+          return 1;
+        }
+      }
+
+      // The gate, on the CLI path. The MCP server refused a contradicting
+      // decision from the first release while `decide` recorded it silently, so
+      // which interface you used decided whether the product's central promise
+      // held. --force records anyway, for the deliberate case.
+      // A deliberate override is the other way through, and it has to be a real
+      // one: the id must already be in the log. That also stops a decision
+      // naming the id it is about to be given, which superseded it out of force
+      // the moment it was written — "recorded", exit 0, and not in force.
+      if (values.supersedes && !all.some((d) => d.id === values.supersedes)) {
+        console.error(`${red("refused")} --supersedes ${values.supersedes}: no decision has that id.`);
+        console.error(`  \`concord-engine check --json\` lists the ids in force.`);
         return 1;
       }
-      if (!(unit.mayDecide ?? []).includes(values.kind as Decision["kind"])) {
-        console.error(`${red("refused")} unit "${unit.id}" may not decide ${values.kind} on its own.`);
-        console.error(`  it may decide: ${(unit.mayDecide ?? []).join(", ") || "nothing"}`);
-        console.error(`  ask the layer above, or record it as that layer with --layer pm.`);
+
+      // An override replaces what it names, so that decision is no longer in
+      // force to be contradicted. This is the same reading detect() takes
+      // through activeDecisions(), which is why record_decision on the MCP side
+      // never had this bug and `decide` did.
+      const inForce = activeDecisions(all).filter((d) => d.id !== values.supersedes);
+      const clash = findContradiction(inForce, values.kind as Decision["kind"], values.subject!, parseValue(values.value!));
+      if (clash && !values.force) {
+        const spec = kindSpec(values.kind as Decision["kind"]);
+        console.error(`${red("refused")} this contradicts a decision already in force.`);
+        console.error(`  ${clash.id}  ${clash.author} (${clash.layer}): ${clash.subject} = ${spec.render(spec.parse(clash.value))}`);
+        if (clash.rationale) console.error(`  because: ${clash.rationale}`);
+        console.error(`  yours:   ${spec.render(spec.parse(parseValue(values.value!)))}`);
+        console.error(`\n  Adopt the existing value, or supersede it deliberately:`);
+        console.error(`    --supersedes ${clash.id} --layer pm      (an override, recorded as one)`);
+        console.error(`    --force                                  (record the disagreement for \`check\` to surface)`);
         return 1;
       }
-    }
 
-    // The gate, on the CLI path. The MCP server refused a contradicting
-    // decision from the first release while `decide` recorded it silently, so
-    // which interface you used decided whether the product's central promise
-    // held. --force records anyway, for the deliberate case.
-    // A deliberate override is the other way through, and it has to be a real
-    // one: the id must already be in the log. That also stops a decision
-    // naming the id it is about to be given, which superseded it out of force
-    // the moment it was written — "recorded", exit 0, and not in force.
-    if (values.supersedes && !all.some((d) => d.id === values.supersedes)) {
-      console.error(`${red("refused")} --supersedes ${values.supersedes}: no decision has that id.`);
-      console.error(`  \`concord-engine check --json\` lists the ids in force.`);
-      return 1;
-    }
-
-    // An override replaces what it names, so that decision is no longer in
-    // force to be contradicted. This is the same reading detect() takes
-    // through activeDecisions(), which is why record_decision on the MCP side
-    // never had this bug and `decide` did.
-    const inForce = activeDecisions(all).filter((d) => d.id !== values.supersedes);
-    const clash = findContradiction(inForce, values.kind as Decision["kind"], values.subject!, parseValue(values.value!));
-    if (clash && !values.force) {
-      const spec = kindSpec(values.kind as Decision["kind"]);
-      console.error(`${red("refused")} this contradicts a decision already in force.`);
-      console.error(`  ${clash.id}  ${clash.author} (${clash.layer}): ${clash.subject} = ${spec.render(spec.parse(clash.value))}`);
-      if (clash.rationale) console.error(`  because: ${clash.rationale}`);
-      console.error(`  yours:   ${spec.render(spec.parse(parseValue(values.value!)))}`);
-      console.error(`\n  Adopt the existing value, or supersede it deliberately:`);
-      console.error(`    --supersedes ${clash.id} --layer pm      (an override, recorded as one)`);
-      console.error(`    --force                                  (record the disagreement for \`check\` to surface)`);
-      return 1;
-    }
-
-    const d: Decision = {
-      id: nextId(all), kind: values.kind as Decision["kind"], subject: values.subject!,
-      value: kindSpec(values.kind!).parse(parseValue(values.value!)),
-      layer, author: values.as!, rationale: values.rationale,
-      supersedes: values.supersedes ?? null, at: new Date().toISOString(),
-    };
-    appendDecision(d, dir);
-    if (values.json) console.log(JSON.stringify(d, null, 2));
-    else console.log(`${green("recorded")} ${d.id}  ${d.kind}: ${d.subject} = ${kindSpec(d.kind).render(d.value)}`);
-    return 0;
+      const d: Decision = {
+        id: nextId(all), kind: values.kind as Decision["kind"], subject: values.subject!,
+        value: kindSpec(values.kind!).parse(parseValue(values.value!)),
+        layer, author: values.as!, rationale: values.rationale,
+        supersedes: values.supersedes ?? null, at: new Date().toISOString(),
+      };
+      appendDecision(d, dir);
+      if (values.json) console.log(JSON.stringify(d, null, 2));
+      else console.log(`${green("recorded")} ${d.id}  ${d.kind}: ${d.subject} = ${kindSpec(d.kind).render(d.value)}`);
+      return 0;
+    });
   }
 
   if (cmd === "check" || cmd === "conflicts") {
@@ -278,30 +281,32 @@ async function main(): Promise<number> {
 
   if (cmd === "bind") {
     const contract = loadContract(requireContract(values, positionals), dir);
-    const active = activeDecisions(readDecisions(dir));
     const author = values.as ?? `contract:${contract.id}`;
     const recorded: string[] = [];
     const refused: string[] = [];
 
-    for (const d of contract.decisions) {
-      const key = `${d.kind}::${normalizeSubject(d.subject)}`;
-      const prior = active.find((x) => `${x.kind}::${normalizeSubject(x.subject)}` === key);
-      const spec = kindSpec(d.kind);
-      if (prior && spec.conflicts(spec.parse(prior.value), spec.parse(d.value))) {
-        // A new contract silently overriding a live decision is the exact
-        // failure this tool exists to prevent, so binding refuses rather
-        // than supersedes. Superseding stays a deliberate, authored act.
-        refused.push(`${d.subject}: contract says ${spec.render(spec.parse(d.value))}, ${prior.author} already decided ${spec.render(spec.parse(prior.value))} (${prior.id})`);
-        continue;
+    withLogLock(dir, () => {
+      const active = activeDecisions(readDecisions(dir));
+      for (const d of contract.decisions) {
+        const key = `${d.kind}::${normalizeSubject(d.subject)}`;
+        const prior = active.find((x) => `${x.kind}::${normalizeSubject(x.subject)}` === key);
+        const spec = kindSpec(d.kind);
+        if (prior && spec.conflicts(spec.parse(prior.value), spec.parse(d.value))) {
+          // A new contract silently overriding a live decision is the exact
+          // failure this tool exists to prevent, so binding refuses rather
+          // than supersedes. Superseding stays a deliberate, authored act.
+          refused.push(`${d.subject}: contract says ${spec.render(spec.parse(d.value))}, ${prior.author} already decided ${spec.render(spec.parse(prior.value))} (${prior.id})`);
+          continue;
+        }
+        if (prior) continue;
+        appendDecision({
+          id: nextId(readDecisions(dir)), kind: d.kind, subject: d.subject, value: d.value,
+          layer: "pm", author, rationale: d.rationale, supersedes: null, at: new Date().toISOString(),
+        }, dir);
+        recorded.push(d.subject);
       }
-      if (prior) continue;
-      appendDecision({
-        id: nextId(readDecisions(dir)), kind: d.kind, subject: d.subject, value: d.value,
-        layer: "pm", author, rationale: d.rationale, supersedes: null, at: new Date().toISOString(),
-      }, dir);
-      recorded.push(d.subject);
-    }
 
+    });
     if (values.json) { console.log(JSON.stringify({ bound: recorded, refused }, null, 2)); return refused.length ? 1 : 0; }
     show(banner(VERSION));
     for (const r of recorded) console.log(`  ${green("bound")}    ${r}`);
