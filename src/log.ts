@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Decision, Kind } from "./types.js";
 import { kindSpec, normalizeSubject } from "./compare.js";
@@ -63,6 +63,51 @@ export function readDecisions(dir = DEFAULT_DIR): Decision[] {
     }
   });
   return out;
+}
+
+/**
+ * Every writer reads the log, checks, then appends: three steps, and two
+ * processes interleaving them both pass the check and both write. Eight
+ * concurrent `decide`s on one subject recorded four contradicting decisions,
+ * all four as d-001. So read-check-append is one critical section, serialised
+ * by an exclusive lock file beside the log.
+ *
+ * `wx` (O_CREAT | O_EXCL) makes taking the lock atomic with no dependency.
+ * A lock is never reclaimed automatically: deciding whether its holder is dead
+ * is itself a race (two waiters both judge it stale and each deletes the
+ * other's fresh lock), and the section it guards is a few milliseconds of
+ * synchronous work, so a leftover lock means a process was killed mid-write.
+ * That is rare enough to surface loudly rather than guess about.
+ */
+export const LOCK_TIMEOUT_MS = 5000;
+const pause = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+export function withLogLock<T>(dir: string, fn: () => T, timeoutMs = LOCK_TIMEOUT_MS): T {
+  const path = `${decisionsPath(dir)}.lock`;
+  mkdirSync(dirname(path), { recursive: true });
+  const deadline = Date.now() + timeoutMs;
+  let fd = -1;
+  while (fd < 0) {
+    try {
+      fd = openSync(path, "wx");
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `${path} is held by another writer; gave up after ${timeoutMs}ms. ` +
+          "If no concord-engine process is running, a writer was killed mid-write: delete the file and retry.",
+        );
+      }
+      pause(5 + Math.random() * 20);
+    }
+  }
+  try {
+    writeSync(fd, `${process.pid}\n`);
+    return fn();
+  } finally {
+    closeSync(fd);
+    unlinkSync(path);
+  }
 }
 
 export function appendDecision(decision: Decision, dir = DEFAULT_DIR): Decision {
