@@ -36,7 +36,7 @@ export function findContradiction(
   value: unknown,
 ): Decision | null {
   const spec = kindSpec(kind);
-  const key = `${kind}::${subject.trim()}`;
+  const key = `${kind}::${normalizeSubject(subject)}`;
   const parsed = spec.parse(value);
   for (const d of active) {
     if (`${d.kind}::${normalizeSubject(d.subject)}` !== key) continue;
