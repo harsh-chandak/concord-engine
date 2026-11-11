@@ -15,6 +15,7 @@
  */
 import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { resolve } from "node:path";
 import { detect, escalate } from "./detect.js";
 import { KIND_IDS, kindSpec, normalizeSubject, shapeHelp } from "./compare.js";
 import { appendDecision, readDecisions, nextId, activeDecisions, resolveDir, withLogLock } from "./log.js";
@@ -28,6 +29,25 @@ import type { Contract, Decision, Layer } from "./types.js";
 
 const VERSION: string = createRequire(import.meta.url)("../package.json").version;
 const DIR = resolveDir();
+
+/**
+ * Where the log actually is, and whether anybody chose it.
+ *
+ * A stdio MCP server's working directory belongs to whoever launched it, not
+ * to the project. So when CONCORD_ENGINE_DIR is unset, `resolveDir` correctly
+ * returns the relative default and that default correctly resolves against a
+ * directory this process did not pick. In one real fan-out that was ~/Desktop
+ * while the project log was ~/Desktop/tarot/.concord-engine: three workers
+ * called record_decision, each got `recorded: true`, and all three decisions
+ * landed in a log the project never reads. `report` stayed clean.
+ *
+ * The failure is silent in both directions — nothing is written where it is
+ * wanted and nothing complains — so the absolute path is reported back on
+ * every write and a server that was never told where to look says so on
+ * stderr. stderr is safe here: stdout is the protocol channel, stderr is not.
+ */
+const DIR_ABS = resolve(DIR);
+const DIR_CHOSEN = Boolean(process.env.CONCORD_ENGINE_DIR?.trim());
 
 async function loadSdk() {
   try {
@@ -250,7 +270,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         appendDecision(candidate, DIR);
-        return ok({ recorded: true, decision: candidate });
+        // `log` is not decoration: it is the only way a caller can tell that
+        // this went somewhere its project will never read.
+        return ok({ recorded: true, decision: candidate, log: DIR_ABS });
       });
     }
 
@@ -261,10 +283,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const q = normalizeSubject(String(a.subject));
         active = active.filter((d) => normalizeSubject(d.subject).includes(q) || q.includes(normalizeSubject(d.subject)));
       }
+      // This tool's description tells a worker to call it BEFORE writing code,
+      // so a confident empty answer is the most dangerous thing it can return:
+      // it reads as "nothing is decided here, choose freely". Proven live — a
+      // server started outside the project answered count 0 for a subject with
+      // two decisions in force, because it was reading another project's log.
+      // So every answer carries the log it came from, and an empty one says as
+      // much in words.
       return ok({
         count: active.length,
+        log: DIR_ABS,
         decisions: active.map((d) => ({ id: d.id, kind: d.kind, subject: d.subject, value: d.value, by: `${d.author} (${d.layer})`, rationale: d.rationale })),
-        note: "These are in force. Implement them as written; if one is wrong, say so rather than deviating silently.",
+        note: active.length
+          ? "These are in force. Implement them as written; if one is wrong, say so rather than deviating silently."
+          : `Nothing in force matches, according to ${DIR_ABS}. An empty answer is not proof that nothing was decided \u2014 if that is not this project's log, the decisions you need are in another one. Check before you choose freely.`,
       });
     }
 
@@ -282,7 +314,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       });
       if (a.owner) out = out.filter((c) => c.owner === a.owner);
-      return ok({ count: out.length, conflicts: out });
+      return ok({ count: out.length, log: DIR_ABS, conflicts: out });
     }
 
     if (name === "record_attempt") {
@@ -301,6 +333,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const cs = readConflicts(DIR);
       const reached = cs.filter((c) => c.owner === "human").length;
       return ok({
+        log: DIR_ABS,
+        logChosen: DIR_CHOSEN,
         conflicts: cs.length,
         settledWithoutHuman: cs.length - reached,
         reachedHuman: reached,
@@ -459,5 +493,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return { isError: true, content: [{ type: "text" as const, text: err instanceof Error ? err.message : String(err) }] };
   }
 });
+
+if (!DIR_CHOSEN) {
+  process.stderr.write(
+    `concord-engine-mcp: CONCORD_ENGINE_DIR is not set, so the decision log resolves\n` +
+      `  against this server's own working directory:\n    ${DIR_ABS}\n` +
+      `  If that is not your project, decisions recorded here are invisible to it\n` +
+      `  and the gate cannot see the project's existing decisions to contradict.\n` +
+      `  Set CONCORD_ENGINE_DIR to the project's ${DIR} directory.\n`,
+  );
+}
 
 await server.connect(new StdioServerTransport());
