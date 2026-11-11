@@ -425,7 +425,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!contract.units.some((u) => u.id === unit)) {
         throw new Error(`no unit "${unit}" in "${contract.id}" — units are: ${contract.units.map((u) => u.id).join(", ")}`);
       }
-      const brief = briefFor(contract, unit, activeDecisions(readDecisions(DIR)));
+      const brief = briefFor(contract, unit, activeDecisions(readDecisions(DIR)), DIR);
       return ok({
         ...brief,
         next: "Hand `instructions` to the worker verbatim, and nothing else from this contract.",
@@ -437,7 +437,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const active = activeDecisions(readDecisions(DIR));
       return ok({
         contract: contract.id,
-        waves: waves(contract).map((w, i) => ({ wave: i + 1, units: w.map((u) => briefFor(contract, u, active)) })),
+        waves: waves(contract).map((w, i) => ({ wave: i + 1, units: w.map((u) => briefFor(contract, u, active, DIR)) })),
         next: "Units within a wave run in parallel. Give each worker only its own brief.",
       });
     }
@@ -469,7 +469,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === "cost_report") {
       const contract = contractArg(a);
       const cpt = typeof a.charsPerToken === "number" && a.charsPerToken > 0 ? a.charsPerToken : 4;
-      const rep = costReport(contract, activeDecisions(readDecisions(DIR)), cpt);
+      const rep = costReport(contract, activeDecisions(readDecisions(DIR)), cpt, DIR);
       return ok({
         ...rep,
         savedPct: Math.round((1 - rep.ratio) * 100),

@@ -70,9 +70,9 @@ doing." The brief already contains everything the worker is allowed to know.
 **Leads and the PM decide. Workers write code and decide nothing.**
 
 Contract decisions enter the log at PM layer before any code exists, so they
-bind from t=0. A worker that hits something undecided calls `record_decision`
-and gets refused if a decision already covers it. It does not pick a value and
-move on.
+bind from t=0. A worker that hits something undecided records a decision —
+`record_decision` over MCP, `decide` on the CLI — and gets refused if a decision
+already covers it. It does not pick a value and move on.
 
 ## Name the open questions before you fan out
 
@@ -98,6 +98,20 @@ declare, offering the declared spelling instead. Pass `--unit` — without it
 that check does not run.
 
 ## The loop
+
+Every `concord-engine ...` below names the command, not a binary you can type.
+**`concord-engine` is not on PATH** unless it was installed globally, and
+`npx --no-install concord-engine` resolves only inside the package's own root.
+Prefer the MCP tools, which need no path at all. If you do shell out, invoke the
+built CLI directly:
+
+```bash
+node <path-to-concord-engine>/dist/cli.js <command>
+```
+
+Every brief this tool prints already carries that path, resolved and absolute,
+in the command it tells the worker to run — hand the brief over unedited and the
+worker needs none of this.
 
 ### 1. Author the contract
 
@@ -215,9 +229,11 @@ window.
 
 ### 6. Let the gate do its job
 
-A worker that needs something undecided calls `record_decision`. If it is
-refused, the response names the decision in force and who may override it. The
-worker adopts the existing value. It does not rename the subject, pick a third
+A worker that needs something undecided records one — `record_decision` over
+MCP, or the `decide` invocation its own brief printed, which is the only form a
+worker has, since `concord-engine` is not on PATH. If it is refused, the
+response names the decision in force and who may override it. The worker
+adopts the existing value. It does not rename the subject, pick a third
 value, or record under a different author — those all defeat the check and put
 the contradiction back into the code where nobody can see it.
 
@@ -229,9 +245,13 @@ Three ways out of a refusal, in order of how often they are right:
    `supersedes` set to the decision being replaced, and only with a rationale
    that says why the earlier one was wrong.
 
-Call `open_conflicts` to see what is open and whose turn it is. If you try to
-resolve one and fail, call `record_attempt` with an honest note. Two attempts
-at a layer and it escalates automatically.
+To see what is open and whose turn it is: `open_conflicts` over MCP, or
+`concord-engine conflicts` on the CLI. `open_conflicts` is an MCP tool name and
+is **not** a CLI command — typed at the CLI it exits non-zero and tells you the
+command above. If you try to resolve one and fail, record the attempt with an
+honest note — `record_attempt` over MCP, `concord-engine attempt <conflict-id>
+--note "..."` on the CLI. Two attempts at a layer and it escalates
+automatically.
 
 Write the note for the person above you. "Tried user_id, rejected" is useless.
 "Proposed user_id; frontend-lead rejected because three call sites already ship
@@ -280,12 +300,30 @@ what you want when you are driving the fan-out programmatically. `--dir <path>`
 or `CONCORD_ENGINE_DIR` moves the log and contract store off the default
 `.concord-engine/`.
 
-## MCP tools
+## MCP tools, and what they are called on the CLI
 
-Same loop, if you are calling tools rather than the CLI: `write_contract`,
-`bind_contract`, `brief_unit`, `fleet_plan`, `run_acceptance`, `generate_docs`,
-`cost_report`, alongside the gate's `record_decision`, `binding_decisions`,
-`open_conflicts`, `record_attempt` and `status`. No prefix on any of them.
+The same loop either way, but **the two surfaces use different names**, and
+several tools exist only over MCP. An MCP name typed at the CLI is not a
+command: it exits non-zero and prints the counterpart below. No prefix on any
+of the MCP names.
+
+| over MCP | on the CLI |
+| --- | --- |
+| `record_decision` | `decide` |
+| `binding_decisions` | `check --json` |
+| `open_conflicts` | `conflicts` |
+| `record_attempt` | `attempt <conflict-id>` |
+| `status` | `report` |
+| `write_contract` | `spec --from <file.json>` |
+| `bind_contract` | `bind --contract <id>` |
+| `brief_unit` | `brief --contract <id> <unit>` |
+| `fleet_plan` | `fleet --contract <id>` |
+| `run_acceptance` | `accept --contract <id>` |
+| `generate_docs` | `docs --contract <id>` |
+| `cost_report` | `cost --contract <id>` |
+
+Two CLI commands have no MCP tool: `verify`, which checks api-contract
+decisions against the code, and `kinds`.
 
 ## Reporting to a human
 
@@ -293,8 +331,9 @@ Give them the packet, not the transcript: the two positions, who holds each,
 why, and what has already been tried. If you find yourself writing "see the
 logs," you have not saved them anything.
 
-`concord-engine report` prints how often a conflict reached a human. That
-number, not agents launched, is what says whether the fleet handled itself.
+`concord-engine report` — `status` over MCP — prints how often a conflict
+reached a human. That number, not agents launched, is what says whether the
+fleet handled itself.
 
 ## What this is not
 

@@ -29,14 +29,9 @@
   },
   "mcpServers": {
     "concord-engine": {
-      "command": "npx",
+      "command": "node",
       "args": [
-        "-y",
-        "-p",
-        "concord-engine@0.3.2",
-        "-p",
-        "@modelcontextprotocol/sdk@1.32.1",
-        "concord-engine-mcp"
+        "${CLAUDE_PLUGIN_ROOT}/dist/mcp.js"
       ],
       "env": {
         "CONCORD_ENGINE_DIR": "${user_config.decisions_dir}"

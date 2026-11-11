@@ -7,9 +7,10 @@
  * which is the property the whole tool rests on.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { KIND_IDS, kindSpec, normalizeSubject } from "./compare.js";
-import { DEFAULT_DIR } from "./log.js";
+import { DEFAULT_DIR, resolveDir } from "./log.js";
 import { bareFileTokens, ownsArea, ownsPath, pathTokens } from "./paths.js";
 import type { Acceptance, AcceptanceOwnershipWarning, Brief, Contract, ContractDecision, Decision, Kind, OwnershipWarning, ScopeOwnershipWarning, Unit } from "./types.js";
 
@@ -578,11 +579,41 @@ export function listContracts(dir = DEFAULT_DIR): string[] {
 const UNSET = "(not yet decided)";
 
 /**
+ * The absolute path of the CLI that belongs to the code now running.
+ *
+ * The brief is documented as the complete worker prompt, so every command it
+ * prints has to run as printed. `concord-engine decide ...` did not: the bin is
+ * only on PATH after a global install, and `npx --no-install concord-engine`
+ * resolves nothing outside this package's own root — which is never where a
+ * worker is. Workers were left hand-editing the invocation into every prompt.
+ *
+ * Resolved from this module's own URL rather than written down, so a brief
+ * always names the CLI that generated it: the plugin cache copy, a global
+ * install, or a checkout under development. cli.js sits beside contract.js in
+ * dist/, which is what makes one relative step correct in all three.
+ */
+const CLI = fileURLToPath(new URL("./cli.js", import.meta.url));
+
+/**
+ * The `node <cli> ...` prefix a worker can paste, carrying the log directory
+ * the brief was generated against.
+ *
+ * The directory has to be absolute and explicit. A worker runs in its own
+ * repo, and the default `.concord-engine` is relative, so an inherited or
+ * omitted value would silently resolve against the worker's cwd — a second
+ * log, no decisions in it, and a gate with nothing to refuse. That failure is
+ * invisible: every decide succeeds.
+ */
+export function cliInvocation(dir?: string): string {
+  return `CONCORD_ENGINE_DIR=${resolve(resolveDir(dir))} node ${CLI}`;
+}
+
+/**
  * What one worker is told. Deliberately not the contract: a worker that can
  * read every other unit's goal will reason about them, and reasoning about
  * work you were not given is how a fleet talks itself into a contradiction.
  */
-export function briefFor(contract: Contract, unitId: string, active: Decision[] = []): Brief {
+export function briefFor(contract: Contract, unitId: string, active: Decision[] = [], dir?: string): Brief {
   const unit = contract.units.find((u) => u.id === unitId);
   if (!unit) throw new Error(`no unit "${unitId}" in contract "${contract.id}"`);
 
@@ -638,9 +669,12 @@ export function briefFor(contract: Contract, unitId: string, active: Decision[] 
       ``,
     ].join("\n") : null,
     `RECORD A DECISION LIKE THIS — the flags are what enforce the two lists above`,
-    `  concord-engine decide --contract ${contract.id} --unit ${unit.id} \\`,
+    `  ${cliInvocation(dir)} decide --contract ${contract.id} --unit ${unit.id} \\`,
     `    --kind <kind> --subject "<what>" --value '<value>' --as ${unit.id} --rationale "<why>"`,
     ``,
+    `  Run it exactly as printed, from any directory. \`concord-engine\` is not on`,
+    `  your PATH, so the interpreter, the script and the log directory are all`,
+    `  named in full; shortening any of them is how this stops working.`,
     `  Omitting --unit skips the check on what you may decide. Use the MCP tool`,
     `  record_decision if you have it; it gates the same way.`,
     `  A refusal means a decision already covers this: adopt the existing value.`,
