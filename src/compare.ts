@@ -155,6 +155,22 @@ const SCHEMA_SHAPE: KindValueShape = {
  * convention the value IS a string, so unparseable text has exactly one
  * possible meaning and taking it is not a guess. Here it has two.
  */
+/**
+ * Code-unit order, deliberately NOT localeCompare.
+ *
+ * This sort canonicalises an enum so that ["a","b"] and ["b","a"] are the same
+ * decision; `conflicts` then compares the two results index by index. A
+ * locale-aware collation is locale-dependent, so two machines could canonicalise
+ * the same enum into different orders and disagree about whether two decisions
+ * contradict — in a log that is the shared contract between agents, that is the
+ * exact class of bug this package exists to prevent. Code-unit order is the same
+ * everywhere.
+ *
+ * Display ordering is a different problem and localeCompare is right there; see
+ * run.ts, which sorts subjects for a brief a human reads.
+ */
+const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
 const commaHint = (raw: unknown): string | undefined => {
   if (typeof raw !== "string" || !raw.includes(",")) return undefined;
   const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
@@ -220,7 +236,7 @@ export const KINDS: Record<Kind, KindSpec> = {
       if (!Array.isArray(raw) || raw.length === 0) {
         throw new KindValueError("enum", "a non-empty array of non-empty strings", raw, "value", commaHint(raw));
       }
-      return [...new Set(raw.map((v, i) => asString(v, "enum", `value[${i}]`)))].sort();
+      return [...new Set(raw.map((v, i) => asString(v, "enum", `value[${i}]`)))].sort(byCodeUnit);
     },
     conflicts(a, b) {
       const x = a as string[], y = b as string[];
