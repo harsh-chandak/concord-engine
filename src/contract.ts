@@ -11,7 +11,8 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KIND_IDS, kindSpec, normalizeSubject } from "./compare.js";
 import { DEFAULT_DIR, resolveDir } from "./log.js";
-import type { Acceptance, Brief, Contract, ContractDecision, Decision, Kind, Unit } from "./types.js";
+import { bareFileTokens, ownsArea, ownsPath, pathTokens } from "./paths.js";
+import type { Acceptance, AcceptanceOwnershipWarning, Brief, Contract, ContractDecision, Decision, Kind, OwnershipWarning, ScopeOwnershipWarning, Unit } from "./types.js";
 
 export const contractsDir = (dir = DEFAULT_DIR) => join(dir, "contracts");
 export const contractPath = (id: string, dir = DEFAULT_DIR) => join(contractsDir(dir), `${id}.json`);
@@ -22,6 +23,12 @@ const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
  * The shape the host agent fills in. Published rather than described, so the
  * agent has something exact to target and the package has something exact to
  * reject against.
+ *
+ * The per-kind value shapes come from the kind specs rather than a copy kept
+ * here. This schema published `"value": {}` — any type at all — while the
+ * validator enforced a different shape for each kind, so an agent that filled
+ * the contract in correctly by this schema's own lights was refused anyway,
+ * one field per round trip. See compare.ts for the definition.
  */
 export const SCHEMA = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -29,6 +36,7 @@ export const SCHEMA = {
   type: "object",
   required: ["id", "goal", "scope", "decisions", "units", "acceptance"],
   additionalProperties: false,
+  $defs: Object.fromEntries(KIND_IDS.map((k) => [`${k}-value`, kindSpec(k).shape.schema])),
   properties: {
     id: { type: "string", pattern: ID.source, description: "kebab-case, unique per project" },
     goal: { type: "string", minLength: 1, description: "one sentence a reviewer can judge the result against" },
@@ -47,9 +55,20 @@ export const SCHEMA = {
         properties: {
           kind: { enum: [...KIND_IDS] },
           subject: { type: "string", minLength: 1 },
-          value: {},
+          value: {
+            description: "the shape depends on kind: the allOf below names it, and each $defs entry carries an example. `concord-engine kinds` prints the same shapes.",
+            anyOf: KIND_IDS.map((k) => ({ $ref: `#/$defs/${k}-value` })),
+          },
           rationale: { type: "string", description: "why this and not the alternative" },
         },
+        // Which shape, given which kind. The validator has always enforced
+        // this; now the schema an agent is handed says it too, so the shape
+        // can be got right the first time instead of learned from refusals.
+        allOf: KIND_IDS.map((k) => ({
+          title: `the value shape when kind is "${k}"`,
+          if: { properties: { kind: { const: k } }, required: ["kind"] },
+          then: { properties: { value: { $ref: `#/$defs/${k}-value` } } },
+        })),
       },
     },
     openSubjects: {
@@ -96,7 +115,7 @@ export const SCHEMA = {
 
 export class ContractError extends Error {
   constructor(public readonly problems: string[]) {
-    super(`contract is not valid:\n${problems.map((p) => `  - ${p}`).join("\n")}`);
+    super(`contract is not valid:\n${problems.map((p) => `  - ${p.split("\n").join("\n    ")}`).join("\n")}`);
     this.name = "ContractError";
   }
 }
@@ -214,6 +233,61 @@ export function validateContract(raw: unknown): Contract {
 
     const cycle = findCycle(units);
     if (cycle) bad(`units form a dependency cycle: ${cycle.join(" -> ")}`);
+
+    // Two units may not be handed the same file. This went unchecked: a
+    // contract naming one file in two units was accepted, both units landed
+    // in the SAME wave (waves come from dependsOn, which knows nothing about
+    // files), and briefFor told each worker "FILES YOU OWN: <file>" followed
+    // by "Another worker owns them" about everything else. Two agents, one
+    // file, each believing it held the file alone, running concurrently.
+    // Last writer won and `report` stayed clean — the precise failure this
+    // project exists to prevent, so it is refused rather than warned about.
+    const norm = (g: string) => g.trim().replace(/^\.\//, "").replace(/\/+$/, "");
+
+    // Does `g` match everything `other` can match? Only the forms that
+    // actually appear in authored contracts are decided — an exact repeat,
+    // `dir/**` over anything beneath it, and `dir/*` over its direct children
+    // only. Anything else returns false: this refuses contracts, so a guess
+    // here would block work that is fine. Full glob intersection would need
+    // a real tree to expand against, and this validator is pure by design —
+    // MCP's write_contract calls it where there may be no repo at all.
+    const covers = (g: string, other: string): boolean => {
+      if (g === other) return true;
+      if (g === "**" || g === "*") return true;
+      if (g.endsWith("/**")) {
+        const base = g.slice(0, -3);
+        return other === base || other.startsWith(`${base}/`);
+      }
+      if (g.endsWith("/*")) {
+        const base = g.slice(0, -2);
+        if (!other.startsWith(`${base}/`)) return false;
+        const rest = other.slice(base.length + 1);
+        // `dir/*` stops at one level: it does not reach dir/sub/file.
+        return rest.length > 0 && !rest.includes("/");
+      }
+      return false;
+    };
+
+    const held = units.map((u) => ({
+      id: u.id,
+      // A glob repeated inside ONE unit is untidy, not contested: still one owner.
+      globs: [...new Set((Array.isArray(u.files) ? u.files : [])
+        .filter((g): g is string => typeof g === "string").map(norm))],
+    }));
+
+    for (let i = 0; i < held.length; i += 1) {
+      for (let j = i + 1; j < held.length; j += 1) {
+        for (const a of held[i].globs) {
+          for (const b of held[j].globs) {
+            if (!covers(a, b) && !covers(b, a)) continue;
+            const why = "two workers each told they alone own one file will overwrite each other";
+            bad(a === b
+              ? `units "${held[i].id}" and "${held[j].id}" both own ${a} — ${why}`
+              : `units "${held[i].id}" and "${held[j].id}" overlap: ${a} also matches ${b} — ${why}`);
+          }
+        }
+      }
+    }
   }
 
   // --- acceptance ------------------------------------------------------
@@ -245,6 +319,206 @@ export function validateContract(raw: unknown): Contract {
 
   if (p.length) throw new ContractError(p);
   return c as unknown as Contract;
+}
+
+/* ---------------------------------------------------------------- *
+ * acceptance ownership                                              *
+ * ---------------------------------------------------------------- */
+
+/**
+ * Whether each criterion's command targets a file the unit that must satisfy
+ * it is allowed to touch.
+ *
+ * The hole: validation confirmed that a criterion named a unit and carried a
+ * command, and never that the command's target was owned by that unit. A
+ * peer's contract had a criterion running
+ * `node scripts/oneoff/verify-workday-liveness.mjs` against a unit whose
+ * `files` list did not include that path. It validated clean, and the worker
+ * would have been told to make a check pass against a file it was forbidden
+ * to create — work that cannot be done, issued as if it could. It was caught
+ * by a human reading the generated brief, which is not a gate.
+ *
+ * Why this is not inside validateContract, and why it warns rather than
+ * rejects. Every other judgement in this file is a comparison, a lookup or a
+ * graph walk; this one is static analysis of an arbitrary shell string, which
+ * is inference. Inference belongs outside the structural validator for two
+ * concrete reasons:
+ *
+ *   1. loadContract() runs validateContract() on every read. A heuristic
+ *      inside it could make an already-stored contract unloadable, so one
+ *      false positive would break `brief`, `accept` and `docs` on a contract
+ *      that was accepted yesterday. A warning cannot do that.
+ *   2. A gate that is sometimes wrong gets switched off. Naming the offending
+ *      path and exiting non-zero is loud enough to stop a careful host agent
+ *      mid-script, and cheap enough to step over when it is wrong.
+ *
+ * Two severities, because they are not equally certain:
+ *
+ *   "unowned"  no unit in the contract declares the path. Nobody is allowed
+ *              to create it, so no worker can satisfy the criterion. This is
+ *              the peer's case, and the only one the CLI fails on.
+ *   "foreign"  another unit owns it, and no dependency relates the two. Far
+ *              more easily legitimate — "my criterion is that your tests
+ *              pass" is a normal contract shape — so it is said out loud and
+ *              left out of the exit code.
+ *
+ * A dependency edge in either direction clears "foreign" entirely: the edge is
+ * what coordinates the two files existing, which is the thing in doubt.
+ */
+export function auditAcceptanceOwnership(contract: Contract): AcceptanceOwnershipWarning[] {
+  const units = new Map(contract.units.map((u) => [u.id, u]));
+  const related = relatedUnits(contract.units);
+  const out: AcceptanceOwnershipWarning[] = [];
+
+  for (const a of contract.acceptance) {
+    const unit = units.get(a.unit);
+    if (!unit || typeof a.check !== "string") continue;
+    const owns = unit.files ?? [];
+
+    for (const path of pathTokens(a.check)) {
+      if (ownsPath(path, owns)) continue;
+
+      const owner = contract.units.find((u) => u.id !== unit.id && ownsPath(path, u.files ?? []));
+      if (!owner) {
+        out.push({ where: "acceptance", severity: "unowned", criterion: a.id, unit: unit.id, check: a.check, path, owns });
+        continue;
+      }
+      if (related.get(unit.id)?.has(owner.id)) continue;
+      out.push({ where: "acceptance", severity: "foreign", criterion: a.id, unit: unit.id, check: a.check, path, owns, owner: owner.id });
+    }
+
+    // A bare filename gets no "unowned" verdict — at the repo root it is as
+    // likely to be `package.json` or `manage.py`, which no unit should own, as
+    // a deliverable, and guessing wrong there would fail a correct contract.
+    // But when another unit has explicitly declared that exact name, the path
+    // is real and owned, and a criterion aimed at it is a routing fact rather
+    // than a guess. This codebase's own contract is the reason it is worth
+    // reading at all: two of its five units own nothing but a bare root file
+    // (SKILL.md, README.md), so a check naming one is ordinary here.
+    for (const name of bareFileTokens(a.check)) {
+      if (ownsPath(name, owns)) continue;
+      const owner = contract.units.find((u) => u.id !== unit.id && ownsPath(name, u.files ?? []));
+      if (!owner || related.get(unit.id)?.has(owner.id)) continue;
+      out.push({ where: "acceptance", severity: "foreign", criterion: a.id, unit: unit.id, check: a.check, path: name, owns, owner: owner.id });
+    }
+  }
+  return out;
+}
+
+/**
+ * Paths the contract declares in scope that no unit's `files` covers.
+ *
+ * The second half of the same hole, and the half that shipped. A real fleet
+ * run declared three files in `scope.in` that no unit owned. The contract
+ * validated clean, every worker was correctly forbidden to touch them, and a
+ * stale spread list went to the UI — the run claimed the surface and assigned
+ * it to nobody.
+ *
+ * Only `scope.in` is read. `scope.out` is the contract saying what it will
+ * NOT do, so a path there being unowned is the point, not a defect.
+ *
+ * `scope.in` is typed as an array of strings and nothing more, and real
+ * contracts put sentences in it ("the sync worker", "read paths only"). So the
+ * entries are mined for path-like tokens the same way a command is, and an
+ * entry that names no path yields nothing.
+ */
+export function auditScopeOwnership(contract: Contract): ScopeOwnershipWarning[] {
+  const out: ScopeOwnershipWarning[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of contract.scope?.in ?? []) {
+    if (typeof entry !== "string") continue;
+    for (const path of pathTokens(entry)) {
+      // ownsArea, not ownsPath: a scope entry names an area, and a unit that
+      // owns everything inside it covers it. See ownsArea.
+      if (contract.units.some((u) => ownsArea(path, u.files ?? []))) continue;
+      if (seen.has(path)) continue;
+      seen.add(path);
+      out.push({ where: "scope.in", severity: "unowned", entry, path });
+    }
+  }
+  return out;
+}
+
+/** Both audits. What the CLI and the MCP server each report, in one call. */
+export function auditOwnership(contract: Contract): OwnershipWarning[] {
+  return [...auditAcceptanceOwnership(contract), ...auditScopeOwnership(contract)];
+}
+
+/**
+ * For each unit, every unit it is connected to through dependsOn, following
+ * the edges in both directions. Transitive on purpose: if A depends on B which
+ * depends on C, then C's files exist before A is judged, which is the only
+ * thing "related" is being asked here.
+ */
+function relatedUnits(units: Unit[]): Map<string, Set<string>> {
+  const ids = new Set(units.map((u) => u.id));
+  const neighbours = new Map<string, Set<string>>(units.map((u) => [u.id, new Set<string>()]));
+  for (const u of units) {
+    for (const dep of u.dependsOn ?? []) {
+      if (!ids.has(dep) || dep === u.id) continue;
+      neighbours.get(u.id)!.add(dep);
+      neighbours.get(dep)!.add(u.id);
+    }
+  }
+
+  const out = new Map<string, Set<string>>();
+  for (const u of units) {
+    const seen = new Set<string>();
+    const stack = [...(neighbours.get(u.id) ?? [])];
+    while (stack.length) {
+      const next = stack.pop()!;
+      if (next === u.id || seen.has(next)) continue;
+      seen.add(next);
+      stack.push(...(neighbours.get(next) ?? []));
+    }
+    out.set(u.id, seen);
+  }
+  return out;
+}
+
+/**
+ * One warning as prose. Names the criterion, the command, the offending path
+ * and the owning unit, plus what that unit does own — so the fix is a copy and
+ * a paste rather than an investigation.
+ */
+export function ownershipProblem(w: OwnershipWarning): string {
+  if (w.where === "scope.in") {
+    return [
+      `scope.in names a path no unit in this contract owns`,
+      `      scope.in:  ${w.entry}`,
+      `      path:      ${w.path}`,
+      `      no unit's \`files\` covers this path, so the run claims it and assigns`,
+      `      it to nobody: every worker is forbidden to touch it, and it ships as`,
+      `      it is. Add it to the files list of the unit that should own it, or`,
+      `      move it to scope.out to say the run leaves it alone.`,
+    ].join("\n");
+  }
+
+  const head = w.severity === "unowned"
+    ? `acceptance "${w.criterion}" checks a path no unit in this contract owns`
+    : `acceptance "${w.criterion}" checks a path unit "${w.owner}" owns`;
+
+  const why = w.severity === "unowned"
+    ? w.owns.length
+      ? `      no unit declares this path, so no worker is allowed to create it and\n`
+        + `      this criterion cannot be satisfied by anyone. Add it to\n`
+        + `      "${w.unit}".files, or to whichever unit should produce it.`
+      : `      unit "${w.unit}" owns no files at all, so it can satisfy no criterion\n`
+        + `      that names a path. Give it a files list, or move "${w.criterion}".`
+    : `      "${w.unit}" must make this pass but may not edit that path, and no\n`
+      + `      dependency relates it to "${w.owner}". Either add the path to\n`
+      + `      "${w.unit}".files, or add "${w.owner}" to "${w.unit}".dependsOn so the\n`
+      + `      two are ordered.`;
+
+  return [
+    head,
+    `      criterion: ${w.criterion}  (unit "${w.unit}")`,
+    `      check:     ${w.check}`,
+    `      path:      ${w.path}`,
+    `      owns:      ${w.owns.length ? w.owns.join(", ") : "(owns no files)"}`,
+    why,
+  ].join("\n");
 }
 
 /** Depth-first cycle detection, returning the cycle so the message is useful. */

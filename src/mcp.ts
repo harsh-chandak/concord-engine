@@ -15,18 +15,39 @@
  */
 import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { resolve } from "node:path";
 import { detect, escalate } from "./detect.js";
-import { KIND_IDS, kindSpec, normalizeSubject } from "./compare.js";
+import { KIND_IDS, kindSpec, normalizeSubject, shapeHelp } from "./compare.js";
 import { appendDecision, readDecisions, nextId, activeDecisions, resolveDir, withLogLock } from "./log.js";
 import { conflictId, reconcile, readConflicts, writeConflict } from "./conflicts.js";
 import {
   ContractError, SCHEMA, briefFor, loadContract, saveContract, validateContract, waves,
+  auditOwnership, ownershipProblem,
 } from "./contract.js";
 import { costReport, generateDocs, runAcceptance } from "./run.js";
 import type { Contract, Decision, Layer } from "./types.js";
 
 const VERSION: string = createRequire(import.meta.url)("../package.json").version;
 const DIR = resolveDir();
+
+/**
+ * Where the log actually is, and whether anybody chose it.
+ *
+ * A stdio MCP server's working directory belongs to whoever launched it, not
+ * to the project. So when CONCORD_ENGINE_DIR is unset, `resolveDir` correctly
+ * returns the relative default and that default correctly resolves against a
+ * directory this process did not pick. In one real fan-out that was ~/Desktop
+ * while the project log was ~/Desktop/tarot/.concord-engine: three workers
+ * called record_decision, each got `recorded: true`, and all three decisions
+ * landed in a log the project never reads. `report` stayed clean.
+ *
+ * The failure is silent in both directions — nothing is written where it is
+ * wanted and nothing complains — so the absolute path is reported back on
+ * every write and a server that was never told where to look says so on
+ * stderr. stderr is safe here: stdout is the protocol channel, stderr is not.
+ */
+const DIR_ABS = resolve(DIR);
+const DIR_CHOSEN = Boolean(process.env.CONCORD_ENGINE_DIR?.trim());
 
 async function loadSdk() {
   try {
@@ -48,7 +69,11 @@ async function loadSdk() {
   }
 }
 
-const KIND_HELP = `One of: ${KIND_IDS.join(", ")}. api-contract takes {method,path,status}; enum takes a list of strings; schema takes {field,type,nullable}; naming and convention take a string.`;
+// Quoted from the kind specs rather than described again here, which is how
+// this string came to disagree with both the published contract schema and the
+// validator at the same time.
+const KIND_HELP = `One of: ${KIND_IDS.join(", ")}. ${shapeHelp()}.`;
+const VALUE_HELP = `Shape depends on kind. ${KIND_IDS.map((k) => `${k}: ${JSON.stringify(kindSpec(k).shape.example)}`).join("; ")}.`;
 
 const TOOLS = [
   {
@@ -60,7 +85,7 @@ const TOOLS = [
       properties: {
         kind: { type: "string", description: KIND_HELP },
         subject: { type: "string", description: "What the decision is about, e.g. 'user identifier in API payloads'. Matched loosely, so phrasing need not be identical to another lead's." },
-        value: { description: "Shape depends on kind. See the kind description." },
+        value: { description: VALUE_HELP },
         author: { type: "string", description: "Who is deciding, e.g. 'backend-lead'." },
         layer: { type: "string", enum: ["lead", "pm"], description: "Default lead. A pm decision overrides a lead's on the same subject." },
         rationale: { type: "string", description: "Why. Shown to whoever has to adjudicate a conflict — write it for them." },
@@ -109,7 +134,7 @@ const TOOLS = [
   {
     name: "write_contract",
     description:
-      "Validate a contract and store it. REFUSES an invalid one and returns every problem at once, with the schema, so you repair it in a single round trip instead of four. A contract that contradicts itself is caught here, before any worker has started.",
+      "Validate a contract and store it. REFUSES an invalid one and returns every problem at once, with the schema, so you repair it in a single round trip instead of four. A contract that contradicts itself is caught here, before any worker has started. Also reports any path the contract names — an acceptance criterion's check command, or a scope.in entry — that no unit's `files` list covers, which validation alone cannot see: a criterion no worker is allowed to satisfy, or in-scope surface assigned to nobody.",
     inputSchema: {
       type: "object",
       properties: {
@@ -245,7 +270,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         appendDecision(candidate, DIR);
-        return ok({ recorded: true, decision: candidate });
+        // `log` is not decoration: it is the only way a caller can tell that
+        // this went somewhere its project will never read.
+        return ok({ recorded: true, decision: candidate, log: DIR_ABS });
       });
     }
 
@@ -256,10 +283,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const q = normalizeSubject(String(a.subject));
         active = active.filter((d) => normalizeSubject(d.subject).includes(q) || q.includes(normalizeSubject(d.subject)));
       }
+      // This tool's description tells a worker to call it BEFORE writing code,
+      // so a confident empty answer is the most dangerous thing it can return:
+      // it reads as "nothing is decided here, choose freely". Proven live — a
+      // server started outside the project answered count 0 for a subject with
+      // two decisions in force, because it was reading another project's log.
+      // So every answer carries the log it came from, and an empty one says as
+      // much in words.
       return ok({
         count: active.length,
+        log: DIR_ABS,
         decisions: active.map((d) => ({ id: d.id, kind: d.kind, subject: d.subject, value: d.value, by: `${d.author} (${d.layer})`, rationale: d.rationale })),
-        note: "These are in force. Implement them as written; if one is wrong, say so rather than deviating silently.",
+        note: active.length
+          ? "These are in force. Implement them as written; if one is wrong, say so rather than deviating silently."
+          : `Nothing in force matches, according to ${DIR_ABS}. An empty answer is not proof that nothing was decided \u2014 if that is not this project's log, the decisions you need are in another one. Check before you choose freely.`,
       });
     }
 
@@ -277,7 +314,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       });
       if (a.owner) out = out.filter((c) => c.owner === a.owner);
-      return ok({ count: out.length, conflicts: out });
+      return ok({ count: out.length, log: DIR_ABS, conflicts: out });
     }
 
     if (name === "record_attempt") {
@@ -296,6 +333,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const cs = readConflicts(DIR);
       const reached = cs.filter((c) => c.owner === "human").length;
       return ok({
+        log: DIR_ABS,
+        logChosen: DIR_CHOSEN,
         conflicts: cs.length,
         settledWithoutHuman: cs.length - reached,
         reachedHuman: reached,
@@ -314,6 +353,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       const contract = validateContract(raw);
       const path = saveContract(contract, DIR);
+      // The CLI's `spec` gate and this tool must agree about what a valid
+      // contract is. They have disagreed before — record_decision refused a
+      // contradiction from the first release while `decide` recorded it
+      // silently — so the ownership audit is reported on both paths, in the
+      // same words.
+      const ownership = auditOwnership(contract);
+      const unsatisfiable = ownership.filter((w) => w.severity === "unowned");
       return ok({
         written: true,
         contract: contract.id,
@@ -322,7 +368,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         decisions: contract.decisions.length,
         acceptance: contract.acceptance.length,
         waves: waves(contract),
-        next: "Call bind_contract to put its decisions in force, then brief_unit for each unit in the first wave.",
+        pathOwnership: ownership,
+        ...(ownership.length ? { pathOwnershipSaid: ownership.map(ownershipProblem) } : {}),
+        next: unsatisfiable.length
+          ? `STOP. ${unsatisfiable.length} ${unsatisfiable.length === 1 ? "path this contract names is" : "paths this contract names are"} owned by no unit in it, so every worker is forbidden to touch ${unsatisfiable.length === 1 ? "it" : "them"}: an acceptance criterion on such a path cannot be satisfied by anyone, and a scope.in entry on one ships unchanged. Fix the contract and call write_contract again before briefing anyone. Paths are read statically, so a glob, a bare filename or a $VAR is not checked — and a wrong accusation is possible; if one of these is wrong, say so rather than widening a files list to silence it.`
+          : "Call bind_contract to put its decisions in force, then brief_unit for each unit in the first wave.",
       });
     }
 
@@ -443,5 +493,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return { isError: true, content: [{ type: "text" as const, text: err instanceof Error ? err.message : String(err) }] };
   }
 });
+
+if (!DIR_CHOSEN) {
+  process.stderr.write(
+    `concord-engine-mcp: CONCORD_ENGINE_DIR is not set, so the decision log resolves\n` +
+      `  against this server's own working directory:\n    ${DIR_ABS}\n` +
+      `  If that is not your project, decisions recorded here are invisible to it\n` +
+      `  and the gate cannot see the project's existing decisions to contradict.\n` +
+      `  Set CONCORD_ENGINE_DIR to the project's ${DIR} directory.\n`,
+  );
+}
 
 await server.connect(new StdioServerTransport());

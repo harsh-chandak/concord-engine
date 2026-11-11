@@ -172,6 +172,20 @@ criterion names no unit or carries no command, when a unit has no criterion, or
 when two of its own decisions already contradict each other. Every problem is
 reported at once — fix them in one pass and re-run.
 
+One further check is a **warning, not a rejection**: `spec` reads the paths the
+contract names — each criterion's check command, and each `scope.in` entry —
+and reports any that no unit's `files` list covers. A criterion like
+`node scripts/verify.mjs` against a unit that does not own that path is work no
+worker is allowed to do, and a `scope.in` entry nobody owns is surface the run
+claimed and assigned to nobody. Both used to validate clean.
+
+The contract is **still stored** when this fires, and `spec` **exits non-zero**
+if any path is owned by no unit at all. A path owned by a *different* unit is
+printed as a note and does not affect the exit code — it is often deliberate.
+Paths are read statically from the command, so a glob (`test/*.test.js`), a
+bare filename or a `$VAR` is not checked, and a wrong accusation is possible.
+If one is wrong, say so — do not widen a `files` list just to silence it.
+
 ### 3. Bind
 
 ```bash
