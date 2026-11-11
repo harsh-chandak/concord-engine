@@ -211,7 +211,15 @@ function handshake(label, dirValue) {
 
       stop();
       resolve({ serverInfo: init.result.serverInfo, tools });
-    })();
+    })().catch((err) => {
+      // Every expected failure above calls die(), which exits. Reaching here
+      // means something threw that the probe did not anticipate. Without this
+      // the rejection is unhandled and the enclosing promise never settles, so
+      // the run hangs to the watchdog and reports a timeout — hiding the real
+      // error behind the one symptom that looks like a slow server.
+      stop();
+      die(`[${label}] probe threw: ${err?.message ?? err}`, err?.stack);
+    });
   });
 }
 
