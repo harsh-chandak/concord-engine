@@ -42,10 +42,30 @@ export interface Conflict {
   at: string;
 }
 
+/**
+ * What a valid value for one kind looks like: the single definition.
+ *
+ * `kinds` prints it, `spec --schema` publishes it, the MCP tool descriptions
+ * quote it, and every rejection shows it. These were three separate
+ * descriptions of the same rules, and the published contract schema said only
+ * `"value": {}` — so an agent handed that schema learned the real shapes by
+ * being refused, one field per round trip.
+ */
+export interface KindValueShape {
+  /** JSON Schema for this kind's `value`, as published by `spec --schema`. */
+  schema: Record<string, unknown>;
+  /** The rule in one line, as printed by `kinds` and quoted by a rejection. */
+  summary: string;
+  /** A value this kind's own `parse` accepts. Shown in every rejection. */
+  example: unknown;
+}
+
 /** How one kind of value is validated, compared and displayed. */
 export interface KindSpec {
   id: Kind;
   label: string;
+  /** The one definition of a valid value: published, printed and enforced. */
+  shape: KindValueShape;
   /** Canonicalise a raw value, or throw with a message a human can act on. */
   parse(raw: unknown): unknown;
   /** True when two canonical values cannot both hold. */

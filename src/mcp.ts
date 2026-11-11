@@ -16,7 +16,7 @@
 import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { detect, escalate } from "./detect.js";
-import { KIND_IDS, kindSpec, normalizeSubject } from "./compare.js";
+import { KIND_IDS, kindSpec, normalizeSubject, shapeHelp } from "./compare.js";
 import { appendDecision, readDecisions, nextId, activeDecisions, resolveDir, withLogLock } from "./log.js";
 import { conflictId, reconcile, readConflicts, writeConflict } from "./conflicts.js";
 import {
@@ -48,7 +48,11 @@ async function loadSdk() {
   }
 }
 
-const KIND_HELP = `One of: ${KIND_IDS.join(", ")}. api-contract takes {method,path,status}; enum takes a list of strings; schema takes {field,type,nullable}; naming and convention take a string.`;
+// Quoted from the kind specs rather than described again here, which is how
+// this string came to disagree with both the published contract schema and the
+// validator at the same time.
+const KIND_HELP = `One of: ${KIND_IDS.join(", ")}. ${shapeHelp()}.`;
+const VALUE_HELP = `Shape depends on kind. ${KIND_IDS.map((k) => `${k}: ${JSON.stringify(kindSpec(k).shape.example)}`).join("; ")}.`;
 
 const TOOLS = [
   {
@@ -60,7 +64,7 @@ const TOOLS = [
       properties: {
         kind: { type: "string", description: KIND_HELP },
         subject: { type: "string", description: "What the decision is about, e.g. 'user identifier in API payloads'. Matched loosely, so phrasing need not be identical to another lead's." },
-        value: { description: "Shape depends on kind. See the kind description." },
+        value: { description: VALUE_HELP },
         author: { type: "string", description: "Who is deciding, e.g. 'backend-lead'." },
         layer: { type: "string", enum: ["lead", "pm"], description: "Default lead. A pm decision overrides a lead's on the same subject." },
         rationale: { type: "string", description: "Why. Shown to whoever has to adjudicate a conflict — write it for them." },

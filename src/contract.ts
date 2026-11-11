@@ -21,6 +21,12 @@ const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
  * The shape the host agent fills in. Published rather than described, so the
  * agent has something exact to target and the package has something exact to
  * reject against.
+ *
+ * The per-kind value shapes come from the kind specs rather than a copy kept
+ * here. This schema published `"value": {}` — any type at all — while the
+ * validator enforced a different shape for each kind, so an agent that filled
+ * the contract in correctly by this schema's own lights was refused anyway,
+ * one field per round trip. See compare.ts for the definition.
  */
 export const SCHEMA = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -28,6 +34,7 @@ export const SCHEMA = {
   type: "object",
   required: ["id", "goal", "scope", "decisions", "units", "acceptance"],
   additionalProperties: false,
+  $defs: Object.fromEntries(KIND_IDS.map((k) => [`${k}-value`, kindSpec(k).shape.schema])),
   properties: {
     id: { type: "string", pattern: ID.source, description: "kebab-case, unique per project" },
     goal: { type: "string", minLength: 1, description: "one sentence a reviewer can judge the result against" },
@@ -46,9 +53,20 @@ export const SCHEMA = {
         properties: {
           kind: { enum: [...KIND_IDS] },
           subject: { type: "string", minLength: 1 },
-          value: {},
+          value: {
+            description: "the shape depends on kind: the allOf below names it, and each $defs entry carries an example. `concord-engine kinds` prints the same shapes.",
+            anyOf: KIND_IDS.map((k) => ({ $ref: `#/$defs/${k}-value` })),
+          },
           rationale: { type: "string", description: "why this and not the alternative" },
         },
+        // Which shape, given which kind. The validator has always enforced
+        // this; now the schema an agent is handed says it too, so the shape
+        // can be got right the first time instead of learned from refusals.
+        allOf: KIND_IDS.map((k) => ({
+          title: `the value shape when kind is "${k}"`,
+          if: { properties: { kind: { const: k } }, required: ["kind"] },
+          then: { properties: { value: { $ref: `#/$defs/${k}-value` } } },
+        })),
       },
     },
     openSubjects: {
@@ -95,7 +113,7 @@ export const SCHEMA = {
 
 export class ContractError extends Error {
   constructor(public readonly problems: string[]) {
-    super(`contract is not valid:\n${problems.map((p) => `  - ${p}`).join("\n")}`);
+    super(`contract is not valid:\n${problems.map((p) => `  - ${p.split("\n").join("\n    ")}`).join("\n")}`);
     this.name = "ContractError";
   }
 }
