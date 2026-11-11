@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 import { createRequire } from "node:module";
 import { readFileSync, writeFileSync } from "node:fs";
 import { detect, escalate } from "./detect.js";
-import { KIND_IDS, kindSpec, normalizeSubject } from "./compare.js";
+import { KIND_IDS, kindSpec, normalizeSubject, expectsString } from "./compare.js";
 import { appendDecision, readDecisions, nextId, activeDecisions, findContradiction, withLogLock, DEFAULT_DIR, resolveDir } from "./log.js";
 import { SCHEMA, validateContract, saveContract, loadContract, briefFor, waves, declaredSubjects } from "./contract.js";
 import { runAcceptance, generateDocs, costReport } from "./run.js";
@@ -47,12 +47,39 @@ Decisions are issued by leads and the PM. Workers write code and issue none.
 Contradiction is decided by comparison, never by a model.
 `;
 
-function parseValue(raw: string): unknown {
+/**
+ * The text of --value, read the way the chosen kind reads it.
+ *
+ * Text opening with "{" or "[" is tried as JSON, because that is what it
+ * usually is. When it does not parse, the kind settles what to do: naming and
+ * convention values ARE strings, so the text has exactly one possible meaning
+ * and taking it is not an inference. Every other kind needs structure, so the
+ * refusal names the kind it expected and shows a value that works.
+ *
+ * It refused either way before, and a peer lost a round trip rewording a real
+ * convention — "{message, data, success}; errors thrown as HttpError and
+ * shaped by the central errorHandler" — for opening with a brace. No opt-out
+ * flag: with the kind in hand the right reading is not ambiguous, and a flag
+ * would only be a second way to say what --kind already says.
+ */
+function parseValue(raw: string, kind?: string): unknown {
   const t = raw.trim();
-  if (t.startsWith("{") || t.startsWith("[")) {
-    try { return JSON.parse(t); } catch { throw new Error(`--value looks like JSON but does not parse: ${t}`); }
+  if (!t.startsWith("{") && !t.startsWith("[")) return raw;
+  try {
+    return JSON.parse(t);
+  } catch {
+    if (kind && expectsString(kind)) return raw;
+    const spec = kind && (KIND_IDS as readonly string[]).includes(kind) ? kindSpec(kind) : null;
+    throw new Error([
+      `--value is not valid JSON${spec ? `, and ${spec.id} needs structure` : ""}: ${t}`,
+      ...(spec ? [
+        `  shape:  ${spec.shape.summary}`,
+        `  valid:  --value '${JSON.stringify(spec.shape.example)}'`,
+      ] : []),
+      `  note:   only naming and convention take a bare string; for those, text that is not JSON is the value.`,
+      `  see:    concord-engine kinds`,
+    ].join("\n"));
   }
-  return raw;
 }
 
 /** A contract id from --contract or the first positional after the command. */
@@ -86,17 +113,17 @@ async function main(): Promise<number> {
   if (values.help || cmd === "help") { show(banner(VERSION)); console.log(USAGE); return 0; }
 
   if (cmd === "kinds") {
+    // Printed from the kind specs, not from a table kept here. The table here
+    // said "a string" for convention while the published contract schema said
+    // a value could be anything and the validator enforced a third thing.
     show(banner(VERSION));
     console.log("\n  kind           value shape\n  " + "-".repeat(58));
-    const shapes: Record<string, string> = {
-      naming: "a string",
-      convention: "a string",
-      "api-contract": '{"method":"POST","path":"/orders","status":201}',
-      enum: '["pending","paid","shipped"]',
-      schema: '{"field":"id","type":"uuid","nullable":false}',
-    };
-    for (const k of KIND_IDS) console.log(`  ${k.padEnd(15)}${shapes[k]}`);
-    console.log("");
+    for (const k of KIND_IDS) {
+      const { summary, example } = kindSpec(k).shape;
+      console.log(`  ${k.padEnd(15)}${summary}`);
+      console.log(`  ${" ".repeat(15)}${dim(`e.g. ${JSON.stringify(example)}`)}`);
+    }
+    console.log(`\n  ${dim("`spec --schema` publishes these same shapes, and a refusal quotes them.")}\n`);
     return 0;
   }
 
@@ -104,6 +131,10 @@ async function main(): Promise<number> {
     for (const r of ["kind", "subject", "value", "as"] as const) {
       if (!values[r]) { console.error(`--${r} is required`); return 2; }
     }
+    // An unknown kind has to fail as an unknown kind. --value cannot be read
+    // until the kind is known, so reading it first blamed the value for a
+    // typo in --kind.
+    try { kindSpec(values.kind!); } catch (err) { console.error((err as Error).message); return 2; }
     const layer = (values.layer ?? "lead") as Layer;
     if (layer !== "lead" && layer !== "pm") { console.error(`--layer must be lead or pm`); return 2; }
     // Read, check and append as one step: see withLogLock.
@@ -163,13 +194,13 @@ async function main(): Promise<number> {
       // through activeDecisions(), which is why record_decision on the MCP side
       // never had this bug and `decide` did.
       const inForce = activeDecisions(all).filter((d) => d.id !== values.supersedes);
-      const clash = findContradiction(inForce, values.kind as Decision["kind"], values.subject!, parseValue(values.value!));
+      const clash = findContradiction(inForce, values.kind as Decision["kind"], values.subject!, parseValue(values.value!, values.kind));
       if (clash && !values.force) {
         const spec = kindSpec(values.kind as Decision["kind"]);
         console.error(`${red("refused")} this contradicts a decision already in force.`);
         console.error(`  ${clash.id}  ${clash.author} (${clash.layer}): ${clash.subject} = ${spec.render(spec.parse(clash.value))}`);
         if (clash.rationale) console.error(`  because: ${clash.rationale}`);
-        console.error(`  yours:   ${spec.render(spec.parse(parseValue(values.value!)))}`);
+        console.error(`  yours:   ${spec.render(spec.parse(parseValue(values.value!, values.kind)))}`);
         console.error(`\n  Adopt the existing value, or supersede it deliberately:`);
         console.error(`    --supersedes ${clash.id} --layer pm      (an override, recorded as one)`);
         console.error(`    --force                                  (record the disagreement for \`check\` to surface)`);
@@ -178,7 +209,7 @@ async function main(): Promise<number> {
 
       const d: Decision = {
         id: nextId(all), kind: values.kind as Decision["kind"], subject: values.subject!,
-        value: kindSpec(values.kind!).parse(parseValue(values.value!)),
+        value: kindSpec(values.kind!).parse(parseValue(values.value!, values.kind)),
         layer, author: values.as!, rationale: values.rationale,
         supersedes: values.supersedes ?? null, at: new Date().toISOString(),
       };
