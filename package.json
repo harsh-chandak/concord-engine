@@ -32,6 +32,8 @@
   ],
   "scripts": {
     "build": "tsc",
+    "// prepare": "The marketplace installs this plugin from GitHub, where dist/ is gitignored, and plugin.json launches node <plugin root>/dist/mcp.js. npm runs prepare on a git or local install but NOT on a published tarball, so marketplace users build it and npm users keep the prebuilt dist from `files`.",
+    "prepare": "npm run build",
     "test": "node --test test/*.test.js",
     "prepublishOnly": "node scripts/prepublish-guard.mjs && npm run build && npm test"
   },
