@@ -232,6 +232,61 @@ export function validateContract(raw: unknown): Contract {
 
     const cycle = findCycle(units);
     if (cycle) bad(`units form a dependency cycle: ${cycle.join(" -> ")}`);
+
+    // Two units may not be handed the same file. This went unchecked: a
+    // contract naming one file in two units was accepted, both units landed
+    // in the SAME wave (waves come from dependsOn, which knows nothing about
+    // files), and briefFor told each worker "FILES YOU OWN: <file>" followed
+    // by "Another worker owns them" about everything else. Two agents, one
+    // file, each believing it held the file alone, running concurrently.
+    // Last writer won and `report` stayed clean — the precise failure this
+    // project exists to prevent, so it is refused rather than warned about.
+    const norm = (g: string) => g.trim().replace(/^\.\//, "").replace(/\/+$/, "");
+
+    // Does `g` match everything `other` can match? Only the forms that
+    // actually appear in authored contracts are decided — an exact repeat,
+    // `dir/**` over anything beneath it, and `dir/*` over its direct children
+    // only. Anything else returns false: this refuses contracts, so a guess
+    // here would block work that is fine. Full glob intersection would need
+    // a real tree to expand against, and this validator is pure by design —
+    // MCP's write_contract calls it where there may be no repo at all.
+    const covers = (g: string, other: string): boolean => {
+      if (g === other) return true;
+      if (g === "**" || g === "*") return true;
+      if (g.endsWith("/**")) {
+        const base = g.slice(0, -3);
+        return other === base || other.startsWith(`${base}/`);
+      }
+      if (g.endsWith("/*")) {
+        const base = g.slice(0, -2);
+        if (!other.startsWith(`${base}/`)) return false;
+        const rest = other.slice(base.length + 1);
+        // `dir/*` stops at one level: it does not reach dir/sub/file.
+        return rest.length > 0 && !rest.includes("/");
+      }
+      return false;
+    };
+
+    const held = units.map((u) => ({
+      id: u.id,
+      // A glob repeated inside ONE unit is untidy, not contested: still one owner.
+      globs: [...new Set((Array.isArray(u.files) ? u.files : [])
+        .filter((g): g is string => typeof g === "string").map(norm))],
+    }));
+
+    for (let i = 0; i < held.length; i += 1) {
+      for (let j = i + 1; j < held.length; j += 1) {
+        for (const a of held[i].globs) {
+          for (const b of held[j].globs) {
+            if (!covers(a, b) && !covers(b, a)) continue;
+            const why = "two workers each told they alone own one file will overwrite each other";
+            bad(a === b
+              ? `units "${held[i].id}" and "${held[j].id}" both own ${a} — ${why}`
+              : `units "${held[i].id}" and "${held[j].id}" overlap: ${a} also matches ${b} — ${why}`);
+          }
+        }
+      }
+    }
   }
 
   // --- acceptance ------------------------------------------------------
