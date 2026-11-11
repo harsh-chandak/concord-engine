@@ -5,7 +5,8 @@ export { readDecisions, appendDecision, activeDecisions, subjectKey, nextId, dec
 export type { Decision, Conflict, ConflictState, Kind, KindSpec, Layer } from "./types.js";
 export { extractRoutes, sourceFiles, verifyRoutes } from "./detectors/routes.js";
 export type { ServedRoute, Violation } from "./detectors/routes.js";
-export { SCHEMA, validateContract, ContractError, saveContract, loadContract, listContracts, contractPath, contractsDir, briefFor, waves } from "./contract.js";
+export { SCHEMA, validateContract, ContractError, saveContract, loadContract, listContracts, contractPath, contractsDir, briefFor, waves, auditOwnership, auditAcceptanceOwnership, auditScopeOwnership, ownershipProblem } from "./contract.js";
+export { pathTokens, bareFileTokens, ownsPath, ownsArea, matchesGlob, normalizeRelPath } from "./paths.js";
 export { runAcceptance, generateDocs, costReport } from "./run.js";
-export type { Contract, ContractDecision, Unit, Acceptance, Brief, CheckResult } from "./types.js";
+export type { Contract, ContractDecision, Unit, Acceptance, Brief, CheckResult, OwnershipWarning, OwnershipSeverity, AcceptanceOwnershipWarning, ScopeOwnershipWarning } from "./types.js";
 export type { CostReport, CostLine } from "./run.js";

@@ -21,6 +21,7 @@ import { appendDecision, readDecisions, nextId, activeDecisions, resolveDir, wit
 import { conflictId, reconcile, readConflicts, writeConflict } from "./conflicts.js";
 import {
   ContractError, SCHEMA, briefFor, loadContract, saveContract, validateContract, waves,
+  auditOwnership, ownershipProblem,
 } from "./contract.js";
 import { costReport, generateDocs, runAcceptance } from "./run.js";
 import type { Contract, Decision, Layer } from "./types.js";
@@ -113,7 +114,7 @@ const TOOLS = [
   {
     name: "write_contract",
     description:
-      "Validate a contract and store it. REFUSES an invalid one and returns every problem at once, with the schema, so you repair it in a single round trip instead of four. A contract that contradicts itself is caught here, before any worker has started.",
+      "Validate a contract and store it. REFUSES an invalid one and returns every problem at once, with the schema, so you repair it in a single round trip instead of four. A contract that contradicts itself is caught here, before any worker has started. Also reports any path the contract names — an acceptance criterion's check command, or a scope.in entry — that no unit's `files` list covers, which validation alone cannot see: a criterion no worker is allowed to satisfy, or in-scope surface assigned to nobody.",
     inputSchema: {
       type: "object",
       properties: {
@@ -318,6 +319,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       const contract = validateContract(raw);
       const path = saveContract(contract, DIR);
+      // The CLI's `spec` gate and this tool must agree about what a valid
+      // contract is. They have disagreed before — record_decision refused a
+      // contradiction from the first release while `decide` recorded it
+      // silently — so the ownership audit is reported on both paths, in the
+      // same words.
+      const ownership = auditOwnership(contract);
+      const unsatisfiable = ownership.filter((w) => w.severity === "unowned");
       return ok({
         written: true,
         contract: contract.id,
@@ -326,7 +334,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         decisions: contract.decisions.length,
         acceptance: contract.acceptance.length,
         waves: waves(contract),
-        next: "Call bind_contract to put its decisions in force, then brief_unit for each unit in the first wave.",
+        pathOwnership: ownership,
+        ...(ownership.length ? { pathOwnershipSaid: ownership.map(ownershipProblem) } : {}),
+        next: unsatisfiable.length
+          ? `STOP. ${unsatisfiable.length} ${unsatisfiable.length === 1 ? "path this contract names is" : "paths this contract names are"} owned by no unit in it, so every worker is forbidden to touch ${unsatisfiable.length === 1 ? "it" : "them"}: an acceptance criterion on such a path cannot be satisfied by anyone, and a scope.in entry on one ships unchanged. Fix the contract and call write_contract again before briefing anyone. Paths are read statically, so a glob, a bare filename or a $VAR is not checked — and a wrong accusation is possible; if one of these is wrong, say so rather than widening a files list to silence it.`
+          : "Call bind_contract to put its decisions in force, then brief_unit for each unit in the first wave.",
       });
     }
 
