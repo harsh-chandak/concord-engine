@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.github.harsh-chandak/concord-engine",
-  "description": "Scale parallelism. Preserve alignment. A fleet of coding agents builds one task in parallel against ",
+  "description": "Scale parallelism. Preserve alignment. Hold a fleet of coding agents to one set of decisions.",
   "repository": {
     "url": "https://github.com/harsh-chandak/concord-engine",
     "source": "github"
