@@ -116,7 +116,13 @@ test("escalation takes two attempts before moving up a layer", () => {
 //
 // The VERIFICATION path runs the acceptance commands the contract named. It
 // exists to spawn subprocesses. It still may not call a model.
-const DECISION_PATH = ["compare.ts", "detect.ts", "log.ts", "conflicts.ts", "contract.ts", "types.ts"];
+// paths.ts decides whether a unit owns a path, which is what makes an
+// acceptance criterion satisfiable — so it is on the decision path, and the
+// rule below holds it to matching strings. It must never consult the real
+// filesystem to resolve a glob: at contract time the file it is asked about
+// usually does not exist yet, and whether a worker MAY write it is a
+// question about the contract, not about the disk.
+const DECISION_PATH = ["compare.ts", "detect.ts", "log.ts", "conflicts.ts", "contract.ts", "paths.ts", "types.ts"];
 const NETWORK = /\b(fetch|anthropic|openai|axios|node:https?|XMLHttpRequest|https?:\/\/api)\b/i;
 // The lookbehind matters: `regex.exec(...)` is a RegExp method, not
 // child_process, and matching it made this test fail on log.ts for

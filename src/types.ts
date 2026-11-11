@@ -42,10 +42,30 @@ export interface Conflict {
   at: string;
 }
 
+/**
+ * What a valid value for one kind looks like: the single definition.
+ *
+ * `kinds` prints it, `spec --schema` publishes it, the MCP tool descriptions
+ * quote it, and every rejection shows it. These were three separate
+ * descriptions of the same rules, and the published contract schema said only
+ * `"value": {}` — so an agent handed that schema learned the real shapes by
+ * being refused, one field per round trip.
+ */
+export interface KindValueShape {
+  /** JSON Schema for this kind's `value`, as published by `spec --schema`. */
+  schema: Record<string, unknown>;
+  /** The rule in one line, as printed by `kinds` and quoted by a rejection. */
+  summary: string;
+  /** A value this kind's own `parse` accepts. Shown in every rejection. */
+  example: unknown;
+}
+
 /** How one kind of value is validated, compared and displayed. */
 export interface KindSpec {
   id: Kind;
   label: string;
+  /** The one definition of a valid value: published, printed and enforced. */
+  shape: KindValueShape;
   /** Canonicalise a raw value, or throw with a message a human can act on. */
   parse(raw: unknown): unknown;
   /** True when two canonical values cannot both hold. */
@@ -136,6 +156,50 @@ export interface Brief {
   /** Instruction text the host hands the worker verbatim. */
   instructions: string;
 }
+
+/**
+ * A path the contract names that nobody is in a position to act on.
+ *
+ * Warnings rather than errors because they are inferred from free strings, not
+ * compared — see auditOwnership. The severity is the whole point:
+ *
+ *   "unowned"  no unit declares the path. An ownership hole: every worker is
+ *              forbidden to touch it, so it ships as it was.
+ *   "foreign"  a different unit declares it. A routing mistake, and much more
+ *              easily deliberate, so it never sets an exit code.
+ */
+export type OwnershipSeverity = "unowned" | "foreign";
+
+/** A criterion whose check command targets a file its own unit cannot touch. */
+export interface AcceptanceOwnershipWarning {
+  where: "acceptance";
+  severity: OwnershipSeverity;
+  /** Acceptance criterion id. */
+  criterion: string;
+  /** The unit that has to satisfy it. */
+  unit: string;
+  /** The command, verbatim. */
+  check: string;
+  /** The path extracted from it, relative and normalised. */
+  path: string;
+  /** What that unit does own, so the fix needs no lookup. */
+  owns: string[];
+  /** The unit that owns the path, when one does. */
+  owner?: string;
+}
+
+/** A path declared in scope that no unit's `files` covers. */
+export interface ScopeOwnershipWarning {
+  where: "scope.in";
+  /** Always "unowned": scope is not attached to a unit, so there is no
+   *  "someone else owns it" to report. */
+  severity: "unowned";
+  /** The scope.in entry the path was read out of, verbatim. */
+  entry: string;
+  path: string;
+}
+
+export type OwnershipWarning = AcceptanceOwnershipWarning | ScopeOwnershipWarning;
 
 export interface CheckResult {
   id: string;

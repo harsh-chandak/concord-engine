@@ -540,3 +540,128 @@ test("a brief names the open subjects verbatim, and drops ones already settled",
     "a settled subject must not still be listed as open");
   assert.match(settled.instructions, /retry policy/, "the genuinely open one stays");
 });
+
+/**
+ * Two units may not be handed the same file.
+ *
+ * This was unchecked. A contract naming one file in two units was accepted,
+ * both units landed in the SAME wave (waves come from dependsOn, which knows
+ * nothing about files), and briefFor told each worker "FILES YOU OWN:
+ * <that file>" followed by "Do not edit files outside this list. Another
+ * worker owns them." Two agents, one file, each believing it held the file
+ * alone, running concurrently. Last writer won and `report` stayed clean.
+ *
+ * That is the exact failure this project exists to prevent, so it is worth a
+ * rejection rather than a warning: a contract that cannot be executed
+ * coherently should not be executable at all.
+ *
+ * Scope, stated honestly: this compares glob STRINGS, so it catches a file
+ * named twice and not `src/**` overlapping `src/a.js`. Deciding whether two
+ * globs can match a common path means either a glob intersection algorithm or
+ * expanding both against a real tree, and validateContract is pure — MCP's
+ * write_contract calls it where there may be no repo to expand against. The
+ * precise version belongs wherever the filesystem is already in hand.
+ */
+test("a contract naming one file in two units is rejected", () => {
+  const p = problems(ok({
+    units: [
+      { id: "core", goal: "write the validator", files: ["src/contract.ts"], mayDecide: ["naming"], dependsOn: [] },
+      { id: "tests", goal: "write the unit tests", files: ["src/contract.ts"], mayDecide: [], dependsOn: ["core"] },
+    ],
+  }));
+  matches(p, /src\/contract\.ts/, "the problem should name the contested file");
+  matches(p, /core/, "the problem should name the first unit holding it");
+  matches(p, /tests/, "the problem should name the other unit holding it");
+});
+
+test("the contested-file problem names both units whichever order they appear in", () => {
+  const flipped = problems(ok({
+    units: [
+      { id: "tests", goal: "write the unit tests", files: ["src/contract.ts"], mayDecide: [], dependsOn: [] },
+      { id: "core", goal: "write the validator", files: ["src/contract.ts"], mayDecide: ["naming"], dependsOn: ["tests"] },
+    ],
+  }));
+  matches(flipped, /src\/contract\.ts/, "still names the file when the units are swapped");
+  matches(flipped, /core/, "still names core");
+  matches(flipped, /tests/, "still names tests");
+});
+
+test("one unit listing the same glob twice is not a contested file", () => {
+  // A duplicate inside ONE unit is untidy, not a collision: there is still
+  // exactly one owner, so nothing can disagree. Rejecting it would turn a
+  // harmless copy-paste into a blocked run.
+  validateContract(ok({
+    units: [
+      { id: "core", goal: "write the validator", files: ["src/contract.ts", "src/contract.ts"], mayDecide: ["naming"], dependsOn: [] },
+      { id: "tests", goal: "write the unit tests", files: ["test/contract.test.js"], mayDecide: [], dependsOn: ["core"] },
+    ],
+  }));
+});
+
+test("./a and a are the same file, not two", () => {
+  const p = problems(ok({
+    units: [
+      { id: "core", goal: "write the validator", files: ["./src/contract.ts"], mayDecide: ["naming"], dependsOn: [] },
+      { id: "tests", goal: "write the unit tests", files: ["src/contract.ts"], mayDecide: [], dependsOn: ["core"] },
+    ],
+  }));
+  matches(p, /src\/contract\.ts/, "a leading ./ must not hide a collision");
+});
+
+/**
+ * The near-miss that makes the string check insufficient on its own.
+ *
+ * In a real six-worker run the shell unit owned four files in web/app/
+ * enumerated one by one, while four sibling units owned web/app/backdrop.*,
+ * fan.*, chooser.* and library.*. The natural glob for a unit described as
+ * "the shell" is web/app/** — and that one keystroke would have swallowed all
+ * four sibling lanes: five units in one wave, each told it alone owned its
+ * files, four of those statements false, and validation accepting it.
+ *
+ * String equality cannot see that, so `covers` decides the two glob forms
+ * that actually get authored. It stays deliberately incomplete: this check
+ * REFUSES contracts, so an unsupported form returns false and lets the
+ * contract through rather than blocking work on a guess.
+ */
+test("a ** glob swallowing another unit's file is rejected", () => {
+  const p = problems(ok({
+    units: [
+      { id: "core", goal: "the shell", files: ["web/app/**"], mayDecide: ["naming"], dependsOn: [] },
+      { id: "tests", goal: "one surface", files: ["web/app/backdrop.js"], mayDecide: [], dependsOn: ["core"] },
+    ],
+  }));
+  matches(p, /web\/app/, "the problem should name the overlapping globs");
+  matches(p, /overlap/, "and say they overlap rather than claiming they are equal");
+});
+
+test("a * glob swallowing a direct sibling is rejected", () => {
+  const p = problems(ok({
+    units: [
+      { id: "core", goal: "the shell", files: ["web/app/*"], mayDecide: ["naming"], dependsOn: [] },
+      { id: "tests", goal: "one surface", files: ["web/app/backdrop.js"], mayDecide: [], dependsOn: ["core"] },
+    ],
+  }));
+  matches(p, /web\/app/, "a single star still reaches its own directory");
+});
+
+test("a * glob does NOT reach into a subdirectory", () => {
+  // The guard against over-refusing: web/app/* cannot match web/app/sub/x.js,
+  // so these two units genuinely do not collide and the contract must stand.
+  validateContract(ok({
+    units: [
+      { id: "core", goal: "the shell", files: ["web/app/*"], mayDecide: ["naming"], dependsOn: [] },
+      { id: "tests", goal: "a nested surface", files: ["web/app/sub/x.js"], mayDecide: [], dependsOn: ["core"] },
+    ],
+  }));
+});
+
+test("siblings enumerated in one directory do not collide", () => {
+  // The shape the real run actually used, and the reason it survived: four
+  // files named individually alongside sibling units in the same directory.
+  validateContract(ok({
+    units: [
+      { id: "core", goal: "the shell", files: ["web/app/index.html", "web/app/main.js"], mayDecide: ["naming"], dependsOn: [] },
+      { id: "tests", goal: "one surface", files: ["web/app/backdrop.js", "web/app/fan.js"], mayDecide: [], dependsOn: ["core"] },
+    ],
+  }));
+});
