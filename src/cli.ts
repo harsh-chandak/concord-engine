@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { detect, escalate } from "./detect.js";
 import { KIND_IDS, kindSpec, normalizeSubject } from "./compare.js";
 import { appendDecision, readDecisions, nextId, activeDecisions, findContradiction, withLogLock, DEFAULT_DIR, resolveDir } from "./log.js";
-import { SCHEMA, validateContract, saveContract, loadContract, briefFor, waves, declaredSubjects } from "./contract.js";
+import { SCHEMA, validateContract, saveContract, loadContract, briefFor, waves, declaredSubjects, auditOwnership, ownershipProblem } from "./contract.js";
 import { runAcceptance, generateDocs, costReport } from "./run.js";
 import { conflictId, reconcile, readConflicts, writeConflict } from "./conflicts.js";
 import { banner, packet, overrideLine, report, dim, green, red } from "./format.js";
@@ -271,12 +271,36 @@ async function main(): Promise<number> {
     const raw = from === "-" ? readFileSync(0, "utf8") : readFileSync(from, "utf8");
     const contract = validateContract(JSON.parse(raw));
     const path = saveContract(contract, dir);
-    if (values.json) { console.log(JSON.stringify(contract, null, 2)); return 0; }
+
+    // Ownership is inferred from free strings, not compared, so it is
+    // reported after the contract is stored rather than refusing it: a
+    // heuristic must not be able to make a contract unreadable, and `brief`
+    // still has to work on one that trips this. The exit code is what stops a
+    // host agent mid-script, and only the certain half of the audit — a path
+    // that no unit anywhere declares — sets it.
+    const ownership = auditOwnership(contract);
+    const unsatisfiable = ownership.filter((w) => w.severity === "unowned");
+
+    if (values.json) {
+      console.log(JSON.stringify({ contract, pathOwnership: ownership }, null, 2));
+      return unsatisfiable.length ? 1 : 0;
+    }
     show(banner(VERSION));
     console.log(`${green("contract accepted")}  ${contract.id}  ${dim(`-> ${path}`)}`);
     console.log(`  ${contract.units.length} units, ${contract.decisions.length} binding decisions, ${contract.acceptance.length} acceptance criteria`);
     console.log(`  waves: ${waves(contract).map((w) => w.join("+")).join(" -> ")}`);
-    return 0;
+
+    if (ownership.length) {
+      console.log("");
+      for (const w of ownership) {
+        console.log(`  ${w.severity === "unowned" ? red("UNSATISFIABLE") : dim("note")}  ${ownershipProblem(w)}`);
+      }
+      console.log(unsatisfiable.length
+        ? `\n  ${red(String(unsatisfiable.length))} ${unsatisfiable.length === 1 ? "path is named by this contract and owned" : "paths are named by this contract and owned"} by no unit in it.`
+        : `\n  ${dim("no ownership hole; the notes above may well be deliberate.")}`);
+      console.log(`  ${dim("Paths are read statically: a glob, a bare filename or a $VAR is not checked.")}`);
+    }
+    return unsatisfiable.length ? 1 : 0;
   }
 
   if (cmd === "bind") {
