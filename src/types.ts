@@ -137,6 +137,50 @@ export interface Brief {
   instructions: string;
 }
 
+/**
+ * A path the contract names that nobody is in a position to act on.
+ *
+ * Warnings rather than errors because they are inferred from free strings, not
+ * compared — see auditOwnership. The severity is the whole point:
+ *
+ *   "unowned"  no unit declares the path. An ownership hole: every worker is
+ *              forbidden to touch it, so it ships as it was.
+ *   "foreign"  a different unit declares it. A routing mistake, and much more
+ *              easily deliberate, so it never sets an exit code.
+ */
+export type OwnershipSeverity = "unowned" | "foreign";
+
+/** A criterion whose check command targets a file its own unit cannot touch. */
+export interface AcceptanceOwnershipWarning {
+  where: "acceptance";
+  severity: OwnershipSeverity;
+  /** Acceptance criterion id. */
+  criterion: string;
+  /** The unit that has to satisfy it. */
+  unit: string;
+  /** The command, verbatim. */
+  check: string;
+  /** The path extracted from it, relative and normalised. */
+  path: string;
+  /** What that unit does own, so the fix needs no lookup. */
+  owns: string[];
+  /** The unit that owns the path, when one does. */
+  owner?: string;
+}
+
+/** A path declared in scope that no unit's `files` covers. */
+export interface ScopeOwnershipWarning {
+  where: "scope.in";
+  /** Always "unowned": scope is not attached to a unit, so there is no
+   *  "someone else owns it" to report. */
+  severity: "unowned";
+  /** The scope.in entry the path was read out of, verbatim. */
+  entry: string;
+  path: string;
+}
+
+export type OwnershipWarning = AcceptanceOwnershipWarning | ScopeOwnershipWarning;
+
 export interface CheckResult {
   id: string;
   statement: string;
