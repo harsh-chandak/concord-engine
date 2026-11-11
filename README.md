@@ -472,16 +472,30 @@ concord-engine brief --contract linkfold api
 
   The residual risk is real: a decision recorded without `--contract`, or with
   `--new-subject`, is matched by wording again.
-- **`verify` only recognises Express-shaped registrations.** It looks for
-  `app`/`router`/`server`/`api` followed by a method call, plus FastAPI and
-  Flask decorators. A plain `node:http` server that switches on
-  `req.url` serves routes it cannot see. Broadening the pattern to any
-  identifier would make `cache.get("key")` look like a route, so it stays
-  narrow and under-reports.
-- **`verify` reads literal paths only.** A router mounted under a prefix, or a
-  path built at runtime, is invisible to static extraction. It under-reports
-  rather than accusing falsely, and prints how many files it read so the number
-  isn't mistaken for completeness.
+- **`verify` only recognises Express- and FastAPI-shaped registrations.** The
+  receiver may be any identifier the same file binds to an application or a
+  router — `const v1Route = express.Router()` and then
+  `v1Route.post("/orders")` — plus the bare names `app`/`router`/`server`/`api`,
+  plus FastAPI and Flask decorators. It is deliberately not *any* identifier:
+  `cache.get("/x")` and an HTTP client's `client.get("/api/users")` would
+  become routes the app does not serve, and a phantom route is what lets
+  `verify` accuse falsely. A name the file binds to something that is not a
+  router loses its place on that list, so `const api = createHttpClient()` is
+  not mistaken for one. A plain server that switches on `req.url`, a path built
+  at runtime, and a router returned by a factory are all invisible.
+- **`verify` reads literal paths only.** It under-reports rather than accusing
+  falsely. A router's path is relative to a mount point static extraction
+  cannot see, so a decided `POST /api/v1/orders` is satisfied by a router's
+  `POST /orders` — and the cost of that is that any router's `/orders`
+  satisfies it, wherever it is really mounted. `verify` prints how many files
+  it read, how many routes it extracted, and how many decisions leaned on that
+  relaxation, so none of those numbers is mistaken for completeness. A router
+  constructed with its own prefix — `APIRouter(prefix="/v1")` — is skipped
+  rather than recorded at the wrong path.
+- **`verify` fails when it extracted nothing.** If api-contract decisions exist
+  and no routes were extracted, it prints `CANNOT VERIFY` and exits non-zero.
+  Checking nothing used to print the same green line as checking everything,
+  which reported a real Express app as clean having read no routes out of it.
 - **It doesn't spawn workers.** `fleet` emits briefs; your host spawns. A package
   that shells out to another agent CLI inherits that tool's auth, rate limits
   and failure modes, and stops being a library.
