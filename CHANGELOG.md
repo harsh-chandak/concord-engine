@@ -1,5 +1,79 @@
 # Changelog
 
+## 0.4.0 — the gate's own failure modes
+
+Eight fixes, every one a case where the gate stayed quiet or answered
+confidently with the wrong thing. They were found by running the loop on real
+fleet work rather than by reading the code.
+
+**A contract could hand one file to two units.** `units[].files` was
+documentation — nothing read it. Two units could own the same path, land in the
+same wave (waves come from `dependsOn` alone), and each receive a brief saying
+"Do not edit files outside this list. Another worker owns them." Both workers
+were told they owned it; the second to finish won, silently. Detection is
+glob-aware, because the collision that matters is `web/app/**` against
+`web/app/page.tsx`, not a typo. All 31 contracts written on the authors'
+machines still validate.
+
+**A contract could name a path no unit was allowed to touch.** An acceptance
+criterion ran a command against a file its unit did not own, and a `scope.in`
+entry that no unit covered claimed a surface and assigned it to nobody.
+
+**The server would not say which decision log it answered from.** Launched with
+an unresolved `${user_config.decisions_dir}`, it defaulted silently and
+answered from whatever log sat under its working directory — in practice
+another project's. `binding_decisions`' own description says "Call this BEFORE
+writing code," so `count: 0` read as permission to choose freely. Every answer
+now carries its absolute path, and an empty result says that empty is not
+proof.
+
+**The published value shapes were not the enforced ones.** `spec --schema`
+advertised `"value": {}` while the validator enforced a different shape per
+kind, so a correctly-filled schema was refused anyway and the refusal never
+stated the rule. One definition per kind now feeds `kinds`, `spec --schema`,
+the MCP descriptions and every rejection. Two parser bugs surfaced while making
+that true: `Number(null)` stored a null status as status `0`, and
+`Boolean("false")` recorded a non-boolean `nullable` as its opposite.
+
+**`verify` passed after extracting zero routes.** It matched only receivers
+literally named `app`/`router`/`server`/`api`, so `express.Router()` bound to
+anything else was invisible — and extracting nothing printed the same green
+line as extracting everything. Receivers are now identified by what the file
+binds them to, vacuity is part of the result, and `verify` exits non-zero
+rather than passing. Router paths mount-match as a suffix, which can only
+suppress a violation, never invent one.
+
+**The plugin launched a path that a fresh install does not contain.** The
+manifest points at `${CLAUDE_PLUGIN_ROOT}/dist/mcp.js`, but the marketplace
+installs from GitHub where `dist/` is gitignored. There was no `prepare`
+script, so `npm install` succeeded and left nothing to launch. This was
+invisible locally only because the installed cache had a `dist/` built by hand
+1h43m after the install.
+
+**The smoke probe reported a timeout for every unexpected error.** Its async
+driver had no rejection handler, so anything the probe did not anticipate hung
+to the watchdog and was reported as a slow server.
+
+**Duplication is measured on `src/` only.** The quality gate was failing on
+test fixtures that repeat deliberately — several exist to pin down which
+receiver shapes are *not* routes, which a reader can only check inline.
+Duplication inside `src/` still fails.
+
+### Known: the registry listing still cannot start the server
+
+`server.json`'s identifier is the npm package `concord-engine`, and a host
+resolving that runs `npx concord-engine` — the **CLI** bin, which prints help
+to stdout and exits 0. On a stdio transport that is garbage on the protocol
+channel followed by a closed stream. The listing has never been able to launch
+the server; the Claude Code plugin is unaffected because it names
+`concord-engine-mcp` explicitly.
+
+`packages/concord-engine-mcp` is the fix: a thin package whose single bin *is*
+the server and which depends on the SDK, so `npx concord-engine-mcp` works with
+no arguments. It ships separately, and the identifier moves to it once it is on
+npm — npm's trusted publishing cannot bootstrap a package that does not exist
+yet, so its first publish is manual.
+
 ## 0.2.2 — the README people actually read
 
 0.2.1's tarball carried the pre-rewrite README: the one that framed the tool
