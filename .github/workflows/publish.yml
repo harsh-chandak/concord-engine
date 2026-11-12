@@ -19,7 +19,11 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22", registry-url: "https://registry.npmjs.org" }
       # Node 22 ships npm 10.x; trusted publishing needs >= 11.5.1.
-      - run: npm install -g npm@latest
+      # Pinned, and installed without lifecycle scripts. 12.2.2 is the version the
+      # 0.4.0 release published under, so this pins a proven one rather than
+      # whatever `latest` resolves to on the day. npm itself declares no
+      # install/prepare scripts, so --ignore-scripts costs nothing here.
+      - run: npm install -g --ignore-scripts npm@12.2.2
       - run: npm ci
       - run: npm run build
       - run: npm test
@@ -67,7 +71,11 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
-      - run: npm install -g npm@latest
+      # Pinned, and installed without lifecycle scripts. 12.2.2 is the version the
+      # 0.4.0 release published under, so this pins a proven one rather than
+      # whatever `latest` resolves to on the day. npm itself declares no
+      # install/prepare scripts, so --ignore-scripts costs nothing here.
+      - run: npm install -g --ignore-scripts npm@12.2.2
 
       - name: is this version already on npm?
         id: served
