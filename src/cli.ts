@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { detect, escalate } from "./detect.js";
 import { KIND_IDS, kindSpec, normalizeSubject, expectsString } from "./compare.js";
 import { appendDecision, readDecisions, nextId, activeDecisions, findContradiction, withLogLock, DEFAULT_DIR, resolveDir } from "./log.js";
-import { SCHEMA, validateContract, saveContract, loadContract, briefFor, waves, declaredSubjects, auditOwnership, ownershipProblem } from "./contract.js";
+import { SCHEMA, validateContract, saveContract, loadContract, briefFor, waves, declaredSubjects, cliInvocation, auditOwnership, ownershipProblem } from "./contract.js";
 import { runAcceptance, generateDocs, costReport } from "./run.js";
 import { conflictId, reconcile, readConflicts, writeConflict } from "./conflicts.js";
 import { banner, packet, overrideLine, report, dim, green, red } from "./format.js";
@@ -46,6 +46,32 @@ the loop — describe a task, run a fleet, finish with it proved and written up:
 Decisions are issued by leads and the PM. Workers write code and issue none.
 Contradiction is decided by comparison, never by a model.
 `;
+
+/**
+ * Tool names that exist only over MCP, and the CLI command that does the same
+ * job under a different name.
+ *
+ * SKILL.md tells an agent to "call open_conflicts"; typed at the CLI that is
+ * not a command, and the old handler answered it with the full help text on
+ * stdout and a one-line error on stderr. In a transcript that reads as a
+ * successful help listing, so an agent would move on believing it had looked.
+ * Naming the counterpart is the whole value here — "unknown command" alone
+ * sends it hunting through help for a word that is not in there.
+ */
+const MCP_ONLY: Record<string, string> = {
+  record_decision: "decide",
+  binding_decisions: "check --json",
+  open_conflicts: "conflicts",
+  record_attempt: "attempt <conflict-id>",
+  status: "report",
+  write_contract: "spec --from <file.json>",
+  bind_contract: "bind --contract <id>",
+  brief_unit: "brief --contract <id> <unit>",
+  fleet_plan: "fleet --contract <id>",
+  run_acceptance: "accept --contract <id>",
+  generate_docs: "docs --contract <id>",
+  cost_report: "cost --contract <id>",
+};
 
 /**
  * The text of --value, read the way the chosen kind reads it.
@@ -404,7 +430,7 @@ async function main(): Promise<number> {
     // itself as a unit when neither was given.
     const unit = values.unit ?? (values.contract ? positionals[1] : positionals[2]);
     if (!unit) { console.error(`brief needs a unit: ${contract.units.map((u) => u.id).join(", ")}`); return 2; }
-    const brief = briefFor(contract, unit, activeDecisions(readDecisions(dir)));
+    const brief = briefFor(contract, unit, activeDecisions(readDecisions(dir)), dir);
     console.log(values.json ? JSON.stringify(brief, null, 2) : brief.instructions);
     return 0;
   }
@@ -414,7 +440,7 @@ async function main(): Promise<number> {
     const active = activeDecisions(readDecisions(dir));
     const plan = waves(contract).map((w, i) => ({
       wave: i + 1,
-      units: w.map((u) => briefFor(contract, u, active)),
+      units: w.map((u) => briefFor(contract, u, active, dir)),
     }));
     if (values.json) { console.log(JSON.stringify({ contract: contract.id, waves: plan }, null, 2)); return 0; }
     show(banner(VERSION));
@@ -422,7 +448,7 @@ async function main(): Promise<number> {
       console.log(`${dim(`wave ${w.wave}`)}  ${w.units.length} worker${w.units.length === 1 ? "" : "s"} in parallel`);
       for (const b of w.units) console.log(`    ${b.unit.padEnd(16)} ${dim(b.goal)}`);
     }
-    console.log(`\n  ${dim("one brief per unit:")} concord-engine brief --contract ${contract.id} <unit>`);
+    console.log(`\n  ${dim("one brief per unit:")} ${cliInvocation(dir)} brief --contract ${contract.id} <unit>`);
     return 0;
   }
 
@@ -450,7 +476,7 @@ async function main(): Promise<number> {
 
   if (cmd === "cost") {
     const contract = loadContract(requireContract(values, positionals), dir);
-    const rep = costReport(contract, activeDecisions(readDecisions(dir)));
+    const rep = costReport(contract, activeDecisions(readDecisions(dir)), 4, dir);
     if (values.json) { console.log(JSON.stringify(rep, null, 2)); return 0; }
     show(banner(VERSION));
     for (const l of rep.lines) {
@@ -465,8 +491,19 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  console.error(`Unknown command "${cmd}".`);
-  console.log(USAGE);
+  // A short error on stderr, and nothing on stdout. Printing USAGE here put
+  // 1690 bytes of help on stdout against 26 bytes of error on stderr, which is
+  // why `status` scanned as success: the help was the loudest thing in the
+  // transcript and it looked like output, not a failure.
+  const equivalent = MCP_ONLY[cmd];
+  if (equivalent) {
+    console.error(`${red("not a CLI command")} "${cmd}" is an MCP tool name.`);
+    console.error(`  over MCP:    ${cmd}`);
+    console.error(`  on the CLI:  concord-engine ${equivalent}`);
+    return 2;
+  }
+  console.error(`${red("unknown command")} "${cmd}".`);
+  console.error(`  \`concord-engine help\` lists every command.`);
   return 2;
 }
 

@@ -138,11 +138,11 @@ export interface CostReport {
  * not a straw man. No tokenizer ships with this package, so the token figures
  * are a stated division, labelled as an estimate everywhere they surface.
  */
-export function costReport(contract: Contract, active: Decision[] = [], charsPerToken = 4): CostReport {
+export function costReport(contract: Contract, active: Decision[] = [], charsPerToken = 4, dir?: string): CostReport {
   const baseline = JSON.stringify(contract).length;
   const lines: CostLine[] = contract.units.map((u) => ({
     unit: u.id,
-    briefBytes: briefFor(contract, u.id, active).instructions.length,
+    briefBytes: briefFor(contract, u.id, active, dir).instructions.length,
     baselineBytes: baseline,
   }));
   const briefTotal = lines.reduce((n, l) => n + l.briefBytes, 0);
