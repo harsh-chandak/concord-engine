@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.4.1 — the registry listing can start the server
+
+`server.json`'s identifier was the npm package `concord-engine`, and a host
+resolving a registry entry runs the bin matching that name — which is the
+**CLI**. It prints help to stdout and exits 0, so over a stdio transport the
+host received garbage on the protocol channel and then a closed stream. Every
+published registry version behaved this way. The Claude Code plugin was never
+affected: it names `concord-engine-mcp` explicitly.
+
+The identifier now points at `concord-engine-mcp`, the launcher introduced in
+0.4.0 — one file importing `concord-engine/mcp`, whose bin name equals its
+package name and which declares `@modelcontextprotocol/sdk` as a real
+dependency. Installing only the launcher pulls in the SDK and this package
+transitively; `npx concord-engine-mcp` starts the server with no arguments.
+
+That changes what `packages[0].version` means: it is the launcher's version,
+not this package's. The release gate used to compare it against `package.json`
+and would now pass while the registry resolved a launcher version npm had
+never served, so it checks four things instead of three — the two versions,
+the launcher's version, the launcher's dependency on this package, and that
+the identifier is in fact the launcher's name.
+
+The launcher publishes from CI in lockstep. Its first version went up by hand
+because npm's trusted publishing cannot bootstrap a name that does not exist
+yet; from here a release that reaches npm reaches the registry with a launcher
+the registry can resolve.
+
 ## 0.4.0 — the gate's own failure modes
 
 Eight fixes, every one a case where the gate stayed quiet or answered
