@@ -289,12 +289,39 @@ each other, and that only stays trustworthy while no model is in the path.
 ## Install
 
 ```bash
-claude plugin marketplace add harsh-chandak/concord-engine
+npx -y -p concord-engine -p @modelcontextprotocol/sdk concord-engine-mcp
+```
+
+That is the whole install for any MCP client — Claude Code, Codex, Copilot,
+Cursor, Zed, anything that speaks the protocol. Point your client at it as a
+stdio server:
+
+```json
+{
+  "mcpServers": {
+    "concord-engine": {
+      "command": "npx",
+      "args": ["-y", "-p", "concord-engine", "-p", "@modelcontextprotocol/sdk", "concord-engine-mcp"],
+      "env": { "CONCORD_ENGINE_DIR": ".concord-engine" }
+    }
+  }
+}
+```
+
+Nothing is installed up front; npx fetches both packages on first run. The
+second `-p` is not optional — the SDK is a peer dependency, not a runtime one,
+so this package stays dependency-free for the people who only want the CLI.
+
+In Claude Code you can skip the config file:
+
+```bash
+claude plugin marketplace add harsh-chandak/shadowjoin
 claude plugin install concord-engine@harsh-chandak
 ```
 
-<sub>The `harsh-chandak` marketplace carries both tools, so `claude plugin install
-shadowjoin@harsh-chandak` works from here too.</sub>
+<sub>One marketplace named `harsh-chandak` carries both tools and it lives in the
+shadowjoin repo. Claude Code keys marketplaces by name, so there can only be
+one.</sub>
 
 Then describe the work and let it run the loop:
 
