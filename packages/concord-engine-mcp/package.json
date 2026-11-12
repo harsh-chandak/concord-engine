@@ -1,0 +1,35 @@
+{
+  "name": "concord-engine-mcp",
+  "version": "0.4.0",
+  "description": "The Concord Engine MCP server, launchable as `npx concord-engine-mcp` with no extra arguments.",
+  "type": "module",
+  "bin": {
+    "concord-engine-mcp": "bin.mjs"
+  },
+  "dependencies": {
+    "concord-engine": "0.4.0",
+    "@modelcontextprotocol/sdk": "^1.32.1"
+  },
+  "files": [
+    "bin.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "mcp",
+    "modelcontextprotocol",
+    "concord-engine",
+    "agents"
+  ],
+  "license": "MIT",
+  "author": "Harsh N. Chandak",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harsh-chandak/concord-engine.git",
+    "directory": "packages/concord-engine-mcp"
+  },
+  "homepage": "https://github.com/harsh-chandak/concord-engine#readme",
+  "engines": {
+    "node": ">=20"
+  }
+}
