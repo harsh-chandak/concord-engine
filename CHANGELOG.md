@@ -1,32 +1,5 @@
 # Changelog
 
-## 0.4.1 — the registry listing can start the server
-
-`server.json`'s identifier was the npm package `concord-engine`, and a host
-resolving a registry entry runs the bin matching that name — which is the
-**CLI**. It prints help to stdout and exits 0, so over a stdio transport the
-host received garbage on the protocol channel and then a closed stream. Every
-published registry version behaved this way. The Claude Code plugin was never
-affected: it names `concord-engine-mcp` explicitly.
-
-The identifier now points at `concord-engine-mcp`, the launcher introduced in
-0.4.0 — one file importing `concord-engine/mcp`, whose bin name equals its
-package name and which declares `@modelcontextprotocol/sdk` as a real
-dependency. Installing only the launcher pulls in the SDK and this package
-transitively; `npx concord-engine-mcp` starts the server with no arguments.
-
-That changes what `packages[0].version` means: it is the launcher's version,
-not this package's. The release gate used to compare it against `package.json`
-and would now pass while the registry resolved a launcher version npm had
-never served, so it checks four things instead of three — the two versions,
-the launcher's version, the launcher's dependency on this package, and that
-the identifier is in fact the launcher's name.
-
-The launcher publishes from CI in lockstep. Its first version went up by hand
-because npm's trusted publishing cannot bootstrap a name that does not exist
-yet; from here a release that reaches npm reaches the registry with a launcher
-the registry can resolve.
-
 ## 0.4.0 — the gate's own failure modes
 
 Eight fixes, every one a case where the gate stayed quiet or answered
@@ -92,14 +65,21 @@ Duplication inside `src/` still fails.
 resolving that runs `npx concord-engine` — the **CLI** bin, which prints help
 to stdout and exits 0. On a stdio transport that is garbage on the protocol
 channel followed by a closed stream. The listing has never been able to launch
-the server; the Claude Code plugin is unaffected because it names
-`concord-engine-mcp` explicitly.
+the server; the Claude Code plugin is unaffected because it launches
+`dist/mcp.js` off the plugin root and never goes through npm at all.
 
-`packages/concord-engine-mcp` is the fix: a thin package whose single bin *is*
-the server and which depends on the SDK, so `npx concord-engine-mcp` works with
-no arguments. It ships separately, and the identifier moves to it once it is on
-npm — npm's trusted publishing cannot bootstrap a package that does not exist
-yet, so its first publish is manual.
+A launcher package was tried and withdrawn. `concord-engine-mcp` would have
+been a thin package whose single bin IS the server, so `npx concord-engine-mcp`
+needed no arguments — but making `npx concord-engine` itself start the server
+requires the MCP SDK as a real runtime dependency, 91 packages and 26 MB, which
+d-006 forbids: "zero runtime dependencies; the MCP SDK stays an optional peer".
+The gate refuses the change when asked.
+
+So the listing stays as it is for now. Nothing else is affected: the Claude Code
+plugin launches `dist/mcp.js` off the plugin root, the CLI is `npx
+concord-engine`, and the skill is a file in this repo. Only a host resolving the
+registry entry is left without a working launch, and fixing that means either
+superseding d-006 or a registry-side argument form with no proven client support.
 
 ## 0.2.2 — the README people actually read
 
