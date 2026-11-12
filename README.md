@@ -289,12 +289,12 @@ each other, and that only stays trustworthy while no model is in the path.
 ## Install
 
 ```bash
-claude plugin marketplace add harsh-chandak/shadowjoin
+claude plugin marketplace add harsh-chandak/concord-engine
 claude plugin install concord-engine@harsh-chandak
 ```
 
-<sub>The `harsh-chandak` marketplace is hosted in the shadowjoin repo and carries
-both tools — that first line is not a typo.</sub>
+<sub>The `harsh-chandak` marketplace carries both tools, so `claude plugin install
+shadowjoin@harsh-chandak` works from here too.</sub>
 
 Then describe the work and let it run the loop:
 
