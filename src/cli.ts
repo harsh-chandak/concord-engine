@@ -9,7 +9,7 @@ import { SCHEMA, validateContract, saveContract, loadContract, briefFor, waves, 
 import { runAcceptance, generateDocs, costReport } from "./run.js";
 import { conflictId, reconcile, readConflicts, writeConflict } from "./conflicts.js";
 import { banner, packet, overrideLine, report, dim, green, red } from "./format.js";
-import { extractRoutes, sourceFiles, verifyRoutes } from "./detectors/routes.js";
+import { extractRoutes, sourceFiles, verifyReport } from "./detectors/routes.js";
 import type { Decision, Layer } from "./types.js";
 
 const VERSION: string = createRequire(import.meta.url)("../package.json").version;
@@ -275,23 +275,49 @@ async function main(): Promise<number> {
     const root = positionals[1] ?? ".";
     const files = sourceFiles(root);
     const served = extractRoutes(files);
-    const violations = verifyRoutes(readDecisions(dir), served);
+    const r = verifyReport(readDecisions(dir), served, files.length);
     if (values.json) {
-      console.log(JSON.stringify({ filesRead: files.length, routesFound: served.length, violations }, null, 2));
-      return violations.length ? 1 : 0;
+      console.log(JSON.stringify(r, null, 2));
+      return r.vacuous || r.violations.length ? 1 : 0;
     }
     show(banner(VERSION));
-    console.log(`  ${dim(`read ${files.length} files, found ${served.length} served routes`)}`);
-    if (!violations.length) {
-      console.log(`  ${green("every api-contract decision is served")}\n`);
+    const n = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+    console.log(`  ${dim(`read ${n(r.filesRead, "file")}, extracted ${n(r.routesFound, "served route")}`)}`);
+    // Extracting nothing and extracting everything used to print the same
+    // green line. Checking nothing is not a pass, and the exit code has to say
+    // so, or a CI job reports a vacuous run as a clean one.
+    if (r.vacuous) {
+      console.log("");
+      console.log(`  ${red("CANNOT VERIFY")}  ${n(r.routesFound, "route")} extracted from ${n(r.filesRead, "file")}, so none of the`);
+      console.log(`                 ${n(r.apiContractDecisions, "api-contract decision")} ${r.apiContractDecisions === 1 ? "was" : "were"} checked against anything.`);
+      console.log(`  ${dim("this is not a pass. verify reads <receiver>.get(\"/path\") where the receiver is an app")}`);
+      console.log(`  ${dim("or a router it can see constructed, plus FastAPI and Flask decorators. a hand-rolled")}`);
+      console.log(`  ${dim("server switching on req.url, a runtime path, or a router from a factory is invisible.")}\n`);
+      return 1;
+    }
+    if (!r.apiContractDecisions) {
+      console.log(`  ${dim("no api-contract decisions to check")}\n`);
+      return 0;
+    }
+    if (!r.violations.length) {
+      console.log(`  ${green("every api-contract decision is served")}  ${dim(`(${n(r.apiContractDecisions, "decision")} checked)`)}`);
+      if (r.mountInferred) {
+        console.log(`  ${dim(`${n(r.mountInferred, "decision")} matched a router path whose mount prefix is not visible`)}`);
+      }
+      console.log("");
       return 0;
     }
     console.log("");
-    for (const v of violations) {
+    for (const v of r.violations) {
       console.log(`  ${red("NOT SERVED")}  ${v.expected}   ${dim(`decided by ${v.decision.author} (${v.decision.layer})`)}`);
-      if (v.nearest) console.log(`              ${dim(`the path exists as ${v.nearest.method} at ${v.nearest.file}:${v.nearest.line}`)}`);
+      if (v.nearest) {
+        const where = `${v.nearest.file}:${v.nearest.line}`;
+        console.log(v.nearest.mountUnknown
+          ? `              ${dim(`a router at ${where} serves ${v.nearest.method} ${v.nearest.path}, under a mount point not visible here`)}`
+          : `              ${dim(`the path exists as ${v.nearest.method} at ${where}`)}`);
+      }
     }
-    console.log(`\n  ${red(String(violations.length))} unserved ${violations.length === 1 ? "decision" : "decisions"}`);
+    console.log(`\n  ${red(String(r.violations.length))} unserved ${r.violations.length === 1 ? "decision" : "decisions"} ${dim(`of ${r.apiContractDecisions} checked`)}`);
     console.log(`  ${dim("static extraction only sees literal paths; a mounted prefix or a runtime path is invisible.")}\n`);
     return 1;
   }
